@@ -1,0 +1,293 @@
+.mentor-register-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, rgba(122, 74, 218, 0.15), transparent 55%),
+    #0f0a1f;
+  padding: 40px 16px;
+  color: #f5f5ff;
+}
+
+.mentor-register-card {
+  width: min(720px, 100%);
+  background: rgba(20, 13, 40, 0.95);
+  border-radius: 18px;
+  padding: 36px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(122, 74, 218, 0.4);
+  backdrop-filter: blur(12px);
+}
+
+.mentor-register-card h1 {
+  font-size: 2rem;
+  margin-bottom: 12px;
+  color: #caa8ff;
+}
+
+.mentor-register-description {
+  margin: 0 0 24px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.mentor-register-help {
+  margin-bottom: 24px;
+  padding: 28px;
+  border-radius: 18px;
+  background: rgba(14, 9, 28, 0.92);
+  border: 1px solid rgba(202, 168, 255, 0.35);
+  display: grid;
+  gap: 20px;
+}
+
+.mentor-register-help h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #e0d1ff;
+}
+
+.mentor-register-help code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.9rem;
+}
+
+.mentor-register-help-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.mentor-register-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(94, 218, 197, 0.14);
+  border: 1px solid rgba(94, 218, 197, 0.4);
+  font-size: 0.95rem;
+  color: #d5fff9;
+}
+
+.mentor-register-info.secondary {
+  background: rgba(94, 218, 197, 0.14);
+  border-color: rgba(94, 218, 197, 0.4);
+  color: #d5fff9;
+}
+
+.mentor-register-info-icon {
+  font-size: 1.2rem;
+}
+
+.mentor-register-table-wrapper {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  border: 1px solid rgba(202, 168, 255, 0.25);
+  overflow: hidden;
+}
+
+.mentor-register-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.mentor-register-table th,
+.mentor-register-table td {
+  padding: 14px;
+  text-align: left;
+}
+
+.mentor-register-table th {
+  background: rgba(202, 168, 255, 0.2);
+  color: #f7f1ff;
+  font-weight: 600;
+}
+
+.mentor-register-table td {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mentor-register-table tbody tr:nth-child(odd) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mentor-register-table-note {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+.mentor-register-tips {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  border: 1px solid rgba(202, 168, 255, 0.25);
+  padding: 20px;
+}
+
+.mentor-register-tips h3 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  color: #e9dcff;
+}
+
+.mentor-register-tips ul {
+  list-style: disc;
+  margin: 0;
+  padding-left: 24px;
+  display: grid;
+  gap: 8px;
+  color: rgba(238, 231, 255, 0.85);
+}
+
+.mentor-register-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 24px;
+}
+
+.sample-button,
+.upload-button {
+  background: linear-gradient(135deg, #5d2ee6, #8e54e9);
+  border: none;
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sample-button:hover,
+.upload-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(94, 46, 230, 0.35);
+}
+
+.sample-button:disabled,
+.upload-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.mentor-register-form {
+  display: grid;
+  gap: 16px;
+}
+
+.file-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  border: 1px dashed rgba(202, 168, 255, 0.4);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.file-picker:hover {
+  border-color: rgba(202, 168, 255, 0.8);
+  background: rgba(202, 168, 255, 0.08);
+}
+
+.file-picker input {
+  display: none;
+}
+
+.file-picker span {
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+
+.mentor-register-error {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(255, 86, 86, 0.15);
+  border: 1px solid rgba(255, 86, 86, 0.4);
+  color: #ff8a8a;
+}
+
+.mentor-register-summary {
+  margin-top: 32px;
+  padding: 24px;
+  border-radius: 16px;
+  background: rgba(30, 18, 58, 0.85);
+  border: 1px solid rgba(122, 74, 218, 0.35);
+}
+
+.mentor-register-summary h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #d8b7ff;
+}
+
+.mentor-register-summary ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+
+.mentor-register-summary li {
+  margin-bottom: 8px;
+}
+
+.mentor-register-summary strong {
+  font-weight: 600;
+  color: #f5f5ff;
+}
+
+.mentor-register-errors {
+  margin-top: 16px;
+}
+
+.mentor-register-errors h3 {
+  margin-bottom: 12px;
+  color: #ffb347;
+}
+
+.mentor-register-errors table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mentor-register-errors th,
+.mentor-register-errors td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mentor-register-errors th {
+  background: rgba(94, 46, 230, 0.25);
+  color: #f5f5ff;
+}
+
+.mentor-register-errors tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 768px) {
+  .mentor-register-card {
+    padding: 24px;
+  }
+
+  .mentor-register-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .upload-button {
+    width: 100%;
+  }
+}

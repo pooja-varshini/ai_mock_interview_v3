@@ -1,0 +1,215 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.instruction-modal {
+  max-width: 800px;
+  width: 90%;
+  padding: 2rem;
+  position: relative;
+}
+
+.close-button {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 2rem;
+  cursor: pointer;
+}
+
+.instruction-title {
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.instruction-intro {
+  text-align: center;
+  color: #b0b0b0;
+  margin-bottom: 2rem;
+}
+
+.carousel-content {
+  height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.step-icon {
+    width: 56px;
+    height: 56px;
+    margin-right: 4px;
+}
+
+.step-title {
+  color: #A78BFA;
+  margin-bottom: 1rem;
+  min-height: 3rem; /* Ensures consistent starting position for content below */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.instruction-list-modal {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.instruction-list--plain {
+  padding-left: 0;
+}
+
+.instruction-item--bullet {
+  position: relative;
+  padding-left: 28px; /* Space for the bullet */
+  margin-bottom: 1rem;
+  color: #e0e0e0;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.instruction-item--bullet::before {
+  content: '•';
+  color: #A78BFA;
+  font-weight: 700;
+  font-size: 1.1rem;
+  position: absolute;
+  left: 0;
+  top: 0.25rem;
+}
+
+.instruction-item--sub-list-trigger {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 1rem;
+  color: #e0e0e0;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.instruction-item--sub-list-trigger::before {
+  content: '•';
+  color: #A78BFA;
+  font-weight: 700;
+  font-size: 1.1rem;
+  position: absolute;
+  left: 0;
+  top: 0.25rem;
+}
+
+.instruction-item--plain,
+.instruction-item--plain-sub-list-trigger {
+  margin-bottom: 0.75rem;
+  color: #e0e0e0;
+  line-height: 1.6;
+  text-align: left;
+  padding-left: 0;
+}
+
+.instruction-item--plain-sub-list-trigger::before {
+  content: none;
+}
+
+.sub-instruction-list {
+    list-style-type: decimal;
+    list-style-position: outside; /* Aligns text vertically */
+    padding-left: 1.5rem; /* Adjust indentation for numbering */
+    margin-top: 0.5rem;
+}
+
+.sub-instruction-list--square {
+  list-style-type: square;
+  padding-left: 1.4rem;
+}
+
+.sub-instruction-list--square li::marker {
+  color: #A78BFA;
+}
+
+.sub-instruction-list li {
+    margin-bottom: 0.5rem;
+    color: #D1C4E9;
+}
+
+.sub-instruction-list li::marker {
+  color: #A78BFA;
+  font-weight: bold;
+}
+
+.sub-instruction-list .sub-point-heading {
+  font-weight: 700;
+  color: #F4E3FF;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.sub-instruction-list .sub-point-description {
+  font-size: 0.95rem;
+  color: #CDBDE9;
+  line-height: 1.5;
+  display: block;
+}
+
+.progress-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 1.5rem 0;
+}
+
+.progress-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #444;
+  transition: background-color 0.3s ease;
+}
+
+.progress-dot.active {
+  background-color: #A78BFA;
+}
+
+.navigation-buttons {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
+.navigation-buttons button {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid #A78BFA;
+  background-color: transparent;
+  color: #A78BFA;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.navigation-buttons button:hover:not(:disabled) {
+  background-color: #A78BFA;
+  color: #fff;
+}
+
+.navigation-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.start-button-final {
+  background-color: #A78BFA !important;
+  color: #fff !important;
+}

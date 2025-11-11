@@ -1,0 +1,41 @@
+:root {
+  font-size: 100%;
+  --space-1: 0.5rem;
+  --space-2: 1rem;
+  --space-3: 1.5rem;
+  --space-4: 2rem;
+  --radius-card: 1.25rem;
+  --max-content-width: min(92vw, 70rem);
+  --font-base: clamp(0.95rem, 0.9rem + 0.4vw, 1.05rem);
+  --font-heading: clamp(1.2rem, 1.05rem + 1vw, 1.8rem);
+  --space-3: clamp(1.25rem, 1.2rem + 0.4vw, 1.75rem);
+  --space-4: clamp(1.75rem, 1.6rem + 0.8vw, 2.25rem);
+  --panel-surface: rgba(24, 22, 35, 0.94);
+  --panel-border: rgba(138, 109, 255, 0.25);
+  --panel-shadow: 0 20px 45px -30px rgba(92, 75, 180, 0.55);
+  --muted-surface: rgba(32, 29, 48, 0.6);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  font-size: var(--font-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body, #root {
+  transform: none !important;
+  position: static !important;
+  will-change: auto !important;
+  min-height: 100%;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}

@@ -1,0 +1,57 @@
+.session-completed-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background-color: #1a1a2e;
+    text-align: center;
+    padding: 20px;
+}
+
+.session-completed-card {
+    background-color: #2c3e50;
+    padding: 40px 50px;
+    border-radius: 12px;
+    color: #ecf0f1;
+    max-width: 500px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.checkmark-icon {
+    font-size: 50px;
+    color: #27ae60;
+    background-color: rgba(39, 174, 96, 0.1);
+    width: 80px;
+    height: 80px;
+    line-height: 80px;
+    border-radius: 50%;
+    margin: 0 auto 20px auto;
+}
+
+.session-completed-card h1 {
+    font-size: 28px;
+    margin-bottom: 15px;
+}
+
+.session-completed-card p {
+    font-size: 16px;
+    color: #bdc3c7;
+    line-height: 1.6;
+    margin-bottom: 30px;
+}
+
+.feedback-button {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 18px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.feedback-button:hover {
+    background-color: #2980b9;
+}
