@@ -99,42 +99,12 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const normalizedQuestionType = typeof rawQuestionType === 'string' ? rawQuestionType.trim().toLowerCase() : '';
     const isSqlQuestion = isCodingQuestion && normalizedQuestionType.includes('sql');
 
-    const rawSupportedLanguages = useMemo(() => {
+    const codingSupportedLanguages = useMemo(() => {
         if (!isCodingQuestion) {
             return undefined;
         }
-
-        const source = question?.raw?.languages
-            ?? question?.raw?.language_options
-            ?? question?.raw?.allowed_languages
-            ?? question?.raw?.supported_languages
-            ?? question?.raw?.available_languages;
-
-        if (!source) {
-            return undefined;
-        }
-
-        if (Array.isArray(source)) {
-            const cleaned = source
-                .map((item) => (typeof item === 'string' ? item.trim() : item))
-                .filter(Boolean);
-            return cleaned.length ? cleaned : undefined;
-        }
-
-        if (typeof source === 'string') {
-            const cleaned = source
-                .split(',')
-                .map((item) => item.trim())
-                .filter(Boolean);
-            return cleaned.length ? cleaned : undefined;
-        }
-
-        return undefined;
-    }, [isCodingQuestion, question]);
-
-    const codingSupportedLanguages = isCodingQuestion
-        ? (isSqlQuestion ? ['sqlite'] : rawSupportedLanguages)
-        : undefined;
+        return isSqlQuestion ? ['sqlite'] : ['python'];
+    }, [isCodingQuestion, isSqlQuestion]);
 
     const codingDefaultLanguage = useMemo(() => {
         if (!isCodingQuestion) {
@@ -143,15 +113,8 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         if (isSqlQuestion) {
             return 'sqlite';
         }
-        const rawDefault = question?.raw?.language || question?.raw?.default_language;
-        if (rawDefault && typeof rawDefault === 'string') {
-            return rawDefault;
-        }
-        if (Array.isArray(rawSupportedLanguages) && rawSupportedLanguages.length > 0) {
-            return rawSupportedLanguages[0];
-        }
         return 'python';
-    }, [isCodingQuestion, isSqlQuestion, question, rawSupportedLanguages]);
+    }, [isCodingQuestion, isSqlQuestion]);
 
     const codingInitialCode = useMemo(() => {
         const starter = question?.raw?.starter_code || question?.raw?.initial_code;
