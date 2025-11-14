@@ -3,18 +3,18 @@ import axios from 'axios';
 // Centralized Axios instances for different backends
 
 export const interviewApi = axios.create({
-  baseURL: 'http://localhost:8001',
+  baseURL: 'https://mockinterview-backend.futurense.com',
 });
 // export const interviewApi = axios.create({
 //   baseURL: 'https://mirella-predeficient-preoccupiedly.ngrok-free.dev',
 //   headers: { 'ngrok-skip-browser-warning': 'true' },
 // });
 export const adminApi = axios.create({
-  baseURL: 'http://localhost:8001',
+  baseURL: 'https://mockinterview-backend.futurense.com',
 });
 
 export const backendApi = axios.create({
-  baseURL: 'http://localhost:8001',
+  baseURL: 'https://mockinterview-backend.futurense.com',
 });
 
 export const pistonApi = axios.create({
