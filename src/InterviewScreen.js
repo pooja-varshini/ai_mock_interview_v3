@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FiBriefcase, FiLayers, FiHome, FiZap, FiAward } from 'react-icons/fi';
-import { interviewApi } from './api';
+import { FiBriefcase, FiHome, FiZap, FiAward } from 'react-icons/fi';
+import { interviewApi, fetchSessionRating, submitSessionRating } from './api';
 import SessionCompleted from './SessionCompleted';
 import FeedbackScreen from './FeedbackScreen';
 import './InterviewScreen.css';
 import CodingWorkspace from './CodingWorkspace';
+import SessionRatingModal from './SessionRatingModal';
 
 const normalizeQuestion = (rawQuestion) => {
     if (!rawQuestion) {
@@ -83,6 +84,10 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const [answerError, setAnswerError] = useState('');
     const [, setCodingSubmission] = useState(null);
     const [maxQuestions, setMaxQuestions] = useState(initialMaxQuestions);
+    const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+    const [existingRating, setExistingRating] = useState({ rating: 0, comments: '' });
+    const [ratingLoaded, setRatingLoaded] = useState(false);
+    const [hasSkippedRating, setHasSkippedRating] = useState(false);
 
     // Refs for speech recognition and text area focus management
     const recognitionRef = useRef(null);
@@ -218,14 +223,81 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         }
     };
 
+    useEffect(() => {
+        const loadExistingRating = async () => {
+            if (!sessionId || !interviewData?.studentEmail) {
+                setRatingLoaded(true);
+                return;
+            }
+            try {
+                const { data } = await fetchSessionRating(sessionId, interviewData.studentEmail);
+                if (data?.rating) {
+                    setExistingRating({ rating: data.rating, comments: data.comments || '' });
+                }
+            } catch (error) {
+                console.warn('Unable to fetch existing session rating:', error);
+            } finally {
+                setRatingLoaded(true);
+            }
+        };
+
+        if (isComplete) {
+            loadExistingRating();
+        }
+    }, [isComplete, sessionId, interviewData?.studentEmail]);
+
+    useEffect(() => {
+        if (isComplete) {
+            if (existingRating.rating > 0 || hasSkippedRating) {
+                setIsRatingModalOpen(false);
+            } else {
+                setIsRatingModalOpen(true);
+            }
+        }
+    }, [isComplete, ratingLoaded, existingRating.rating, hasSkippedRating]);
+
     const handleMicClick = () => {
         if (isRecording) {
             stopSpeechRecognition();
         } else {
-            if (answerError) { 
+            if (answerError) {
                 setAnswerError('');
             }
             startSpeechRecognition();
+        }
+    };
+
+    const handleRatingSubmit = async ({ rating, comments }) => {
+        if (!sessionId || !interviewData?.studentEmail) {
+            setIsRatingModalOpen(false);
+            onInterviewEnd(sessionId);
+            return;
+        }
+
+        try {
+            await submitSessionRating(sessionId, interviewData.studentEmail, { rating, comments });
+            addToast('Thank you for rating your interview!', 'success');
+            setExistingRating({ rating, comments: comments || '' });
+            setHasSkippedRating(false);
+            setIsRatingModalOpen(false);
+        } catch (error) {
+            console.error('Failed to submit session rating:', error);
+            const message = error?.response?.data?.detail || 'Unable to submit rating. Please try again later.';
+            addToast(message, 'error');
+            throw new Error(message);
+        }
+    };
+
+    const handleRatingSkip = () => {
+        setIsRatingModalOpen(false);
+        setHasSkippedRating(true);
+    };
+
+    const handleReturnToDashboard = () => {
+        if (existingRating.rating > 0 || hasSkippedRating) {
+            onInterviewEnd(sessionId);
+        } else {
+            setIsRatingModalOpen(true);
         }
     };
 
@@ -488,14 +560,23 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                         sessionId={sessionId}
                         preloadedFeedback={finalFeedback ? finalFeedback : null}
                     />
-                    <div className="completion-actions">
-                        <button
-                            className="return-dashboard-button"
-                            onClick={() => onInterviewEnd(sessionId)}
-                        >
-                            Return to Dashboard
-                        </button>
-                    </div>
+                    {!isRatingModalOpen && (
+                        <div className="completion-actions">
+                            <button
+                                className="return-dashboard-button"
+                                onClick={handleReturnToDashboard}
+                            >
+                                Return to Dashboard
+                            </button>
+                        </div>
+                    )}
+                    <SessionRatingModal
+                        isOpen={isRatingModalOpen}
+                        defaultRating={existingRating.rating}
+                        defaultComments={existingRating.comments}
+                        onSubmit={handleRatingSubmit}
+                        onSkip={handleRatingSkip}
+                    />
                 </div>
             );
         }
@@ -504,7 +585,13 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             <div className="interview-screen">
                 <SessionCompleted
                     onGetFeedback={() => setShowFeedback(true)}
-                    onReturnToDashboard={() => onInterviewEnd(sessionId)}
+                />
+                <SessionRatingModal
+                    isOpen={isRatingModalOpen && !showFeedback}
+                    defaultRating={existingRating.rating}
+                    defaultComments={existingRating.comments}
+                    onSubmit={handleRatingSubmit}
+                    onSkip={handleRatingSkip}
                 />
             </div>
         );
@@ -522,6 +609,8 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const questionColumnClass = isCodingQuestion
         ? "question-column question-column--split"
         : "question-column";
+
+    const shouldHideQuestionContent = !isCodingQuestion && questionNumber === 1 && !isAnswering;
 
     const questionCardClasses = ["question-card"];
     if (isCodingQuestion) {
@@ -542,12 +631,16 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             let match;
             let tokenIndex = 0;
 
-            while ((match = boldRegex.exec(line)) !== null) {
+            // Check if line starts with "- " to convert to bullet point
+            const isBulletPoint = line.trimStart().startsWith('- ');
+            const processedLine = isBulletPoint ? line.trimStart().substring(2) : line;
+
+            while ((match = boldRegex.exec(processedLine)) !== null) {
                 const matchStart = match.index;
                 const matchText = match[1];
 
                 if (matchStart > lastIndex) {
-                    const plainText = line.slice(lastIndex, matchStart);
+                    const plainText = processedLine.slice(lastIndex, matchStart);
                     if (plainText) {
                         segments.push(
                             <span key={`text-${lineIndex}-${tokenIndex}`}>{plainText}</span>
@@ -563,19 +656,20 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                 lastIndex = matchStart + match[0].length;
             }
 
-            if (lastIndex < line.length) {
-                const remainingText = line.slice(lastIndex);
+            if (lastIndex < processedLine.length) {
+                const remainingText = processedLine.slice(lastIndex);
                 segments.push(
                     <span key={`text-${lineIndex}-${tokenIndex}`}>{remainingText}</span>
                 );
             }
 
             if (segments.length === 0) {
-                segments.push(<span key={`text-${lineIndex}-0`}>{line || '\u00a0'}</span>);
+                segments.push(<span key={`text-${lineIndex}-0`}>{processedLine || '\u00a0'}</span>);
             }
 
             return (
                 <React.Fragment key={`line-${lineIndex}`}>
+                    {isBulletPoint && <span className="bullet-point">• </span>}
                     {segments}
                     {lineIndex < lines.length - 1 ? <br /> : null}
                 </React.Fragment>
@@ -625,12 +719,21 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
                 <div className={columnsClass}>
                     <div className={questionColumnClass}>
-                        {renderSkillsSection(isCodingQuestion)}
+                        {!shouldHideQuestionContent && (
+                            <>
+                                {renderSkillsSection(isCodingQuestion)}
 
-                        <div className={questionCardClasses.join(' ')}>
-                            <p className="question-number">Question {questionNumber}</p>
-                            <h2 className="question-text">{renderQuestionText(question?.text)}</h2>
-                        </div>
+                                <div className={questionCardClasses.join(' ')}>
+                                    <p className="question-number">Question {questionNumber}</p>
+                                    <h2 className="question-text">{renderQuestionText(question?.text)}</h2>
+                                    {isSqlQuestion ? (
+                                        <p className="question-note" role="note">
+                                            Note : Create your own tables, insert your own records, and perform the necessary operations to solve this query.
+                                        </p>
+                                    ) : null}
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {isCodingQuestion ? (

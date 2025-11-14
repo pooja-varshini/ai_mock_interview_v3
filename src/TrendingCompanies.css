@@ -24,6 +24,7 @@
     color: #e9e5ff;
     cursor: pointer;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    font-family: var(--font-family-body);
 }
 
 .custom-dropdown.open .custom-dropdown__trigger,
@@ -103,6 +104,7 @@
     text-align: left;
     cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease;
+    font-family: var(--font-family-body);
 }
 
 .custom-dropdown__option:hover,
@@ -201,17 +203,21 @@
 }
 
 .quick-start-button {
-    background: linear-gradient(135deg, #9F76F9 0%, #7b5ffd 100%);
-    color: #0D0D0F;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 14px;
+    background: var(--color-button-primary);
+    color: var(--color-button-primary-text-dark-surface);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 12px 18px;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+    font-family: var(--font-family-body);
+    box-shadow: 0 16px 32px -22px rgba(159, 118, 249, 0.65);
 }
 
 .quick-start-button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 14px 28px -18px rgba(159, 118, 249, 0.9);
+    background: var(--color-button-hover-dark-surface);
+    color: var(--color-button-hover-dark-text);
+    box-shadow: 0 20px 30px -22px rgba(255, 255, 255, 0.3);
 }

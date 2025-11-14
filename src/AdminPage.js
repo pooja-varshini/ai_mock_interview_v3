@@ -4,10 +4,23 @@ import {
   fetchAdminStudents,
   fetchAdminSessions,
   fetchAdminPerformanceAnalytics,
+  fetchAdminInsights,
   fetchAdminLeaderboard,
 } from './api';
 import FeedbackScreen from './FeedbackScreen';
 import './AdminPage.css';
+import {
+  EngagementAreaChart,
+  ProgramComposedChart,
+  ProgramPieChart,
+  ExperienceHorizontalBar,
+  IndustryScatter,
+  IndustryVolumeBar,
+  CompanyTreemap,
+  TrendingRolesBar,
+  CompletionRateBar,
+  ChartPlaceholder,
+} from './AdminAnalyticsCharts';
 
 const formatNumber = (value) =>
   typeof value === 'number' ? value.toLocaleString('en-IN') : '--';
@@ -51,11 +64,18 @@ const AdminPage = () => {
   const [sessions, setSessions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [insightsState, setInsightsState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
   const [activeSession, setActiveSession] = useState(null);
-  const [studentFilters, setStudentFilters] = useState({ name: '', status: '' });
+  const [studentFilters, setStudentFilters] = useState({
+    name: '',
+    status: '',
+    university_name: '',
+    program_name: '',
+    batch_label: '',
+  });
   const [studentsLoading, setStudentsLoading] = useState(true);
   const [sessionFilters, setSessionFilters] = useState({
     role: '',
@@ -98,6 +118,18 @@ const AdminPage = () => {
         setStats(statsRes.data);
         setAnalytics(analyticsRes.data ?? null);
         setLeaderboard(leaderboardRes.data ?? []);
+
+        try {
+          const insightsRes = await fetchAdminInsights();
+          if (!cancelled) {
+            setInsightsState(insightsRes.data ?? null);
+          }
+        } catch (insightsError) {
+          console.warn('Admin insights endpoint unavailable:', insightsError);
+          if (!cancelled) {
+            setInsightsState(null);
+          }
+        }
       } catch (err) {
         if (!cancelled) {
           console.error('Failed to load admin dashboard', err);
@@ -127,6 +159,9 @@ const AdminPage = () => {
           limit: 8,
           name: studentFilters.name || undefined,
           status: studentFilters.status || undefined,
+          university_name: studentFilters.university_name || undefined,
+          program_name: studentFilters.program_name || undefined,
+          batch_label: studentFilters.batch_label || undefined,
         });
 
         if (cancelled) return;
@@ -156,7 +191,13 @@ const AdminPage = () => {
   };
 
   const clearStudentFilters = () => {
-    setStudentFilters({ name: '', status: '' });
+    setStudentFilters({
+      name: '',
+      status: '',
+      university_name: '',
+      program_name: '',
+      batch_label: '',
+    });
   };
 
   useEffect(() => {
@@ -211,8 +252,93 @@ const AdminPage = () => {
 
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
 
-  const scoreDistribution = useMemo(() => analytics?.score_distribution ?? [], [analytics]);
   const dailyTrends = useMemo(() => analytics?.daily_trends ?? [], [analytics]);
+  const engagementSummary = useMemo(() => insightsState?.engagement_summary ?? null, [insightsState]);
+  const programPerformance = useMemo(() => insightsState?.program_performance ?? [], [insightsState]);
+  const experienceBreakdown = useMemo(() => insightsState?.experience_breakdown ?? [], [insightsState]);
+  const industryHotspots = useMemo(() => insightsState?.industry_company_hotspots ?? [], [insightsState]);
+  const trendingRoles = useMemo(() => insightsState?.trending_roles ?? [], [insightsState]);
+  const reattemptHotspots = useMemo(() => insightsState?.reattempt_hotspots ?? [], [insightsState]);
+
+  const programChartData = useMemo(() => {
+    if (!Array.isArray(programPerformance)) return [];
+    return programPerformance.map((program) => ({
+      ...program,
+      avg_overall:
+        program.completed_sessions && Number.isFinite(program.avg_overall) && program.avg_overall > 0
+          ? program.avg_overall
+          : null,
+    }));
+  }, [programPerformance]);
+
+  const completionRates = useMemo(() => {
+    if (!Array.isArray(programPerformance)) return [];
+    return programPerformance.map((program) => {
+      const totalSessions = (program.completed_sessions || 0) + (program.remaining_sessions || 0);
+      const completionRate = totalSessions > 0 ? ((program.completed_sessions || 0) / totalSessions) * 100 : 0;
+      return {
+        program_name: program.program_name,
+        completion_rate: Number.isFinite(completionRate) ? Math.round(completionRate) : 0,
+      };
+    });
+  }, [programPerformance]);
+
+  const industryVolume = useMemo(() => {
+    if (!Array.isArray(industryHotspots)) return [];
+    const grouped = new Map();
+    industryHotspots.forEach((item) => {
+      const key = item.industry || 'Unknown';
+      grouped.set(key, (grouped.get(key) || 0) + (item.total_sessions || 0));
+    });
+    return Array.from(grouped.entries()).map(([industry, total]) => ({ industry, total_sessions: total }));
+  }, [industryHotspots]);
+
+  const companyTreemapData = useMemo(() => {
+    if (!Array.isArray(industryHotspots)) return [];
+    return industryHotspots.map((item) => ({ name: item.company, size: item.total_sessions || 0 }));
+  }, [industryHotspots]);
+
+  const engagementCards = useMemo(() => {
+    if (!engagementSummary) return [];
+    return [
+      {
+        key: 'total-students',
+        label: 'Total Students',
+        value: formatNumber(engagementSummary.total_students),
+        hint: 'Registered overall',
+      },
+      {
+        key: 'active-students',
+        label: 'Active (30 days)',
+        value: formatNumber(engagementSummary.active_students_30_days),
+        hint: `${formatNumber(Math.max((engagementSummary.active_students_30_days || 0) - (engagementSummary.repeat_combos || 0), 0))} unique currently engaged`,
+      },
+      {
+        key: 'inactive-students',
+        label: 'Inactive (30 days)',
+        value: formatNumber(engagementSummary.inactive_students_30_days),
+        hint: 'Need outreach',
+      },
+      {
+        key: 'avg-session',
+        label: 'Avg Sessions / Active',
+        value: formatScore(engagementSummary.avg_sessions_per_active),
+        hint: 'Last 30 days',
+      },
+      {
+        key: 'completed-total',
+        label: 'Completed Sessions',
+        value: formatNumber(engagementSummary.total_completed_sessions),
+        hint: 'All time',
+      },
+      {
+        key: 'repeat-rate',
+        label: 'Reattempt Combos',
+        value: formatNumber(engagementSummary.repeat_combos),
+        hint: `${formatNumber(engagementSummary.repeat_attempts)} total reattempts`,
+      },
+    ];
+  }, [engagementSummary]);
 
   const handleViewReport = (sessionId) => {
     if (!sessionId) return;
@@ -280,7 +406,10 @@ const AdminPage = () => {
           </nav>
         </aside>
 
-        <section className="admin-content" aria-live="polite">
+        <section
+          className={`admin-content ${activeTab === 'analytics' ? 'admin-content--analytics' : ''}`}
+          aria-live="polite"
+        >
           {activeTab === 'overview' && (
             <div className="admin-tabpanel" role="tabpanel">
               <section className="admin-section">
@@ -385,11 +514,50 @@ const AdminPage = () => {
                       <option value="No Sessions">No Sessions</option>
                     </select>
                   </div>
+                  <div className="admin-filter">
+                    <label htmlFor="student-university-filter">University</label>
+                    <input
+                      id="student-university-filter"
+                      name="university_name"
+                      type="search"
+                      placeholder="Filter by university"
+                      value={studentFilters.university_name}
+                      onChange={handleStudentFilterChange}
+                    />
+                  </div>
+                  <div className="admin-filter">
+                    <label htmlFor="student-program-filter">Program</label>
+                    <input
+                      id="student-program-filter"
+                      name="program_name"
+                      type="search"
+                      placeholder="Filter by program"
+                      value={studentFilters.program_name}
+                      onChange={handleStudentFilterChange}
+                    />
+                  </div>
+                  <div className="admin-filter">
+                    <label htmlFor="student-batch-filter">Batch</label>
+                    <input
+                      id="student-batch-filter"
+                      name="batch_label"
+                      type="search"
+                      placeholder="Filter by batch"
+                      value={studentFilters.batch_label}
+                      onChange={handleStudentFilterChange}
+                    />
+                  </div>
                   <button
                     type="button"
                     className="admin-button-text admin-button-text--ghost"
                     onClick={clearStudentFilters}
-                    disabled={!studentFilters.name && !studentFilters.status}
+                    disabled={
+                      !studentFilters.name &&
+                      !studentFilters.status &&
+                      !studentFilters.university_name &&
+                      !studentFilters.program_name &&
+                      !studentFilters.batch_label
+                    }
                   >
                     Clear
                   </button>
@@ -400,44 +568,52 @@ const AdminPage = () => {
                   ) : students.length === 0 ? (
                     <div className="admin-panel__placeholder">No student records found.</div>
                   ) : (
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>ID</th>
-                          <th>Name</th>
-                          <th>Email</th>
-                          <th>Sessions</th>
-                          <th>Avg. Score</th>
-                          <th>Status</th>
-                          <th>Last Session</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {students.map((student) => (
-                          <tr key={student.student_id}>
-                            <td>{student.student_id}</td>
-                            <td>{student.name}</td>
-                            <td className="admin-text--muted">{student.email}</td>
-                            <td>{formatNumber(student.total_sessions)}</td>
-                            <td>{formatScore(student.avg_score)}</td>
-                            <td>
-                              <span
-                                className={`admin-chip ${
-                                  student.status === 'Active'
-                                    ? 'admin-chip--success'
-                                    : student.status === 'Completed'
-                                    ? 'admin-chip--neutral'
-                                    : 'admin-chip--muted'
-                                }`}
-                              >
-                                {student.status}
-                              </span>
-                            </td>
-                            <td>{student.last_session ? new Date(student.last_session).toLocaleDateString() : '—'}</td>
+                    <div className="admin-table-scroll">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>University</th>
+                            <th>Program</th>
+                            <th>Batch</th>
+                            <th>Sessions</th>
+                            <th>Avg. Score</th>
+                            <th>Status</th>
+                            <th>Last Session</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {students.map((student) => (
+                            <tr key={student.student_id}>
+                              <td>{student.student_id}</td>
+                              <td>{student.name}</td>
+                              <td className="admin-text--muted">{student.email}</td>
+                              <td className="admin-text--muted">{student.university_name || '—'}</td>
+                              <td className="admin-text--muted">{student.program_name || '—'}</td>
+                              <td className="admin-text--muted">{student.batch_label || '—'}</td>
+                              <td>{formatNumber(student.total_sessions)}</td>
+                              <td>{formatScore(student.avg_score)}</td>
+                              <td>
+                                <span
+                                  className={`admin-chip ${
+                                    student.status === 'Active'
+                                      ? 'admin-chip--success'
+                                      : student.status === 'Completed'
+                                      ? 'admin-chip--neutral'
+                                      : 'admin-chip--muted'
+                                  }`}
+                                >
+                                  {student.status}
+                                </span>
+                              </td>
+                              <td>{student.last_session ? new Date(student.last_session).toLocaleDateString() : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </section>
@@ -609,60 +785,151 @@ const AdminPage = () => {
 
           {activeTab === 'analytics' && (
             <div className="admin-tabpanel" role="tabpanel">
-              <section className="admin-section admin-section--split">
-                <div className="admin-panel">
-                  <div className="admin-section__head">
-                    <h2>Score Distribution</h2>
-                    <span className="admin-section__hint">Aggregate across the last two weeks</span>
-                  </div>
-                  {loading && scoreDistribution.length === 0 ? (
-                    <div className="admin-panel__placeholder">Loading analytics…</div>
-                  ) : scoreDistribution.length === 0 ? (
-                    <div className="admin-panel__placeholder">Not enough data yet.</div>
-                  ) : (
-                    <ul className="admin-distribution">
-                      {scoreDistribution.map((bucket) => (
-                        <li key={bucket.range}>
-                          <span>{bucket.range}</span>
-                          <span className="admin-metric admin-metric--small">{formatNumber(bucket.count)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+              <section className="admin-section">
+                <div className="admin-section__head">
+                  <h2>Engagement Summary</h2>
+                  <span className="admin-section__hint">Snapshot of the last 30 days.</span>
                 </div>
-
-                <div className="admin-panel admin-panel--scroll">
-                  <div className="admin-section__head">
-                    <h2>Daily Trends</h2>
-                    <span className="admin-section__hint">Sessions and scores across the last two weeks</span>
+                {loading && engagementCards.length === 0 ? (
+                  <ChartPlaceholder message="Loading engagement insights…" />
+                ) : engagementCards.length === 0 ? (
+                  <ChartPlaceholder message="No engagement insights yet." />
+                ) : (
+                  <div className="admin-grid admin-grid--metrics">
+                    {engagementCards.map((metric) => (
+                      <article key={metric.key} className="admin-card admin-card--metric">
+                        <h3>{metric.label}</h3>
+                        <p className="admin-metric">{metric.value}</p>
+                        {metric.hint ? <span className="admin-card__hint">{metric.hint}</span> : null}
+                      </article>
+                    ))}
                   </div>
+                )}
+              </section>
+
+              <section className="admin-section">
+                <div className="admin-section__head">
+                  <h2>Engagement Overview</h2>
+                  <span className="admin-section__hint">Monitor student activity and session trends.</span>
+                </div>
+                <article className="admin-panel admin-panel--chart">
+                  <header className="admin-panel__head">
+                    <h3>Engagement Trends</h3>
+                    <span className="admin-section__hint">Sessions vs. completed sessions</span>
+                  </header>
                   {loading && dailyTrends.length === 0 ? (
-                    <div className="admin-panel__placeholder">Loading trend data…</div>
+                    <ChartPlaceholder message="Loading trend data…" />
                   ) : dailyTrends.length === 0 ? (
-                    <div className="admin-panel__placeholder">Trend data unavailable.</div>
+                    <ChartPlaceholder message="Trend data unavailable." />
                   ) : (
+                    <EngagementAreaChart
+                      data={dailyTrends.map((trend) => ({
+                        label: new Date(trend.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                        sessions: trend.sessions,
+                        completed: trend.completed,
+                      }))}
+                    />
+                  )}
+                </article>
+              </section>
+
+              <section className="admin-section">
+                <div className="admin-section__head">
+                  <h2>Program Performance</h2>
+                  <span className="admin-section__hint">Compare outcomes across programs.</span>
+                </div>
+                <div className="admin-grid admin-grid--analytics">
+                  <article className="admin-panel admin-panel--chart">
+                    <header className="admin-panel__head">
+                      <h3>Sessions &amp; Average Scores</h3>
+                    </header>
+                    {loading && programChartData.length === 0 ? (
+                      <ChartPlaceholder message="Loading program metrics…" />
+                    ) : programChartData.length === 0 ? (
+                      <ChartPlaceholder />
+                    ) : (
+                      <ProgramComposedChart data={programChartData} />
+                    )}
+                  </article>
+
+                  <article className="admin-panel admin-panel--chart">
+                    <header className="admin-panel__head">
+                      <h3>Student Distribution</h3>
+                    </header>
+                    {loading && programPerformance.length === 0 ? (
+                      <ChartPlaceholder message="Loading distribution…" />
+                    ) : programPerformance.length === 0 ? (
+                      <ChartPlaceholder />
+                    ) : (
+                      <ProgramPieChart data={programPerformance} />
+                    )}
+                  </article>
+                </div>
+              </section>
+
+              <section className="admin-section">
+                <div className="admin-section__head">
+                  <h2>Experience Breakdown</h2>
+                  <span className="admin-section__hint">Sessions and scores by work experience.</span>
+                </div>
+                <article className="admin-panel admin-panel--chart">
+                  {loading && experienceBreakdown.length === 0 ? (
+                    <ChartPlaceholder message="Loading experience data…" />
+                  ) : experienceBreakdown.length === 0 ? (
+                    <ChartPlaceholder />
+                  ) : (
+                    <ExperienceHorizontalBar data={experienceBreakdown} />
+                  )}
+                </article>
+              </section>
+
+              <section className="admin-section">
+                <div className="admin-section__head">
+                  <h2>Trending Roles</h2>
+                  <span className="admin-section__hint">Roles with the highest number of completed sessions.</span>
+                </div>
+                <article className="admin-panel admin-panel--chart">
+                  {loading && trendingRoles.length === 0 ? (
+                    <ChartPlaceholder message="Loading role data…" />
+                  ) : trendingRoles.length === 0 ? (
+                    <ChartPlaceholder />
+                  ) : (
+                    <TrendingRolesBar data={trendingRoles} />
+                  )}
+                </article>
+              </section>
+
+              <section className="admin-section">
+                <div className="admin-section__head">
+                  <h2>Reattempt Hotspots</h2>
+                  <span className="admin-section__hint">Role &amp; company pairings with repeat attempts.</span>
+                </div>
+                {loading && reattemptHotspots.length === 0 ? (
+                  <ChartPlaceholder message="Loading reattempt data…" />
+                ) : reattemptHotspots.length === 0 ? (
+                  <ChartPlaceholder message="No reattempt hotspots detected yet." />
+                ) : (
+                  <div className="admin-panel admin-panel--table">
                     <table className="admin-table admin-table--compact">
                       <thead>
                         <tr>
-                          <th>Date</th>
-                          <th>Sessions</th>
-                          <th>Completed</th>
-                          <th>Avg. Score</th>
+                          <th>Job Role</th>
+                          <th>Company</th>
+                          <th>Repeat Students</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {dailyTrends.map((trend) => (
-                          <tr key={trend.date}>
-                            <td>{new Date(trend.date).toLocaleDateString()}</td>
-                            <td>{formatNumber(trend.sessions)}</td>
-                            <td>{formatNumber(trend.completed)}</td>
-                            <td>{formatScore(trend.avg_score)}</td>
+                        {reattemptHotspots.map((item, index) => (
+                          <tr key={`${item.job_role}-${item.company}-${index}`}>
+                            <td>{item.job_role}</td>
+                            <td>{item.company}</td>
+                            <td>{formatNumber(item.repeat_students)}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  )}
-                </div>
+                  </div>
+                )}
               </section>
             </div>
           )}

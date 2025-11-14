@@ -32,12 +32,14 @@
 .instruction-title {
   text-align: center;
   margin-bottom: 0.5rem;
+  font-size: 1.75rem;
 }
 
 .instruction-intro {
   text-align: center;
   color: #b0b0b0;
   margin-bottom: 2rem;
+  font-size: 0.95rem;
 }
 
 .carousel-content {
@@ -59,6 +61,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 1.35rem;
 }
 
 
@@ -80,6 +83,7 @@
   color: #e0e0e0;
   line-height: 1.6;
   text-align: left;
+  font-size: 0.95rem;
 }
 
 .instruction-item--bullet::before {
@@ -99,6 +103,7 @@
   color: #e0e0e0;
   line-height: 1.6;
   text-align: left;
+  font-size: 0.95rem;
 }
 
 .instruction-item--sub-list-trigger::before {
@@ -118,6 +123,7 @@
   line-height: 1.6;
   text-align: left;
   padding-left: 0;
+  font-size: 0.95rem;
 }
 
 .instruction-item--plain-sub-list-trigger::before {
@@ -143,6 +149,7 @@
 .sub-instruction-list li {
     margin-bottom: 0.5rem;
     color: #D1C4E9;
+    font-size: 0.9rem;
 }
 
 .sub-instruction-list li::marker {
@@ -158,7 +165,7 @@
 }
 
 .sub-instruction-list .sub-point-description {
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   color: #CDBDE9;
   line-height: 1.5;
   display: block;

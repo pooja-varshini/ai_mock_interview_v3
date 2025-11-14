@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiChevronDown } from 'react-icons/fi';
-import { fetchJobRolesByWorkExperience } from './api';
+import { fetchJobRolesByWorkExperience, fetchPublicInterviewTypes, fetchPublicWorkExperienceLevels } from './api';
 // We will create this CSS file next
 import './TrendingCompanies.css';
 
@@ -64,6 +64,7 @@ const CustomDropdown = ({ placeholder, value, options, onChange, onOpen }) => {
                                     type="button"
                                     role="option"
                                     className={`custom-dropdown__option${option === value ? ' selected' : ''}`}
+                                    aria-selected={option === value}
                                     onClick={() => handleSelect(option)}
                                 >
                                     {option}
@@ -85,21 +86,61 @@ const TrendingCompanies = ({
     programName = '',
     onSelectRole,
     onQuickStart,
+    onInteract,
+    manualResetTick = 0,
+    externalSelections = { company: '', industry: '', interviewType: '', workExperience: '' },
 }) => {
     const [activeCompany, setActiveCompany] = React.useState(null);
 
     const safeCompanyList = Array.isArray(companies) ? companies : [];
     const safeRoleList = Array.isArray(allRoles) ? allRoles : [];
-    const safeInterviewTypes = Array.isArray(interviewTypes) ? interviewTypes : [];
-    const safeWorkExperience = Array.isArray(workExperienceOptions) ? workExperienceOptions : [];
+    const [safeInterviewTypes, setSafeInterviewTypes] = React.useState(Array.isArray(interviewTypes) ? interviewTypes : []);
+    const [safeWorkExperience, setSafeWorkExperience] = React.useState(Array.isArray(workExperienceOptions) ? workExperienceOptions : []);
+
+    React.useEffect(() => {
+        setSafeInterviewTypes(Array.isArray(interviewTypes) ? interviewTypes : []);
+    }, [interviewTypes]);
+
+    React.useEffect(() => {
+        setSafeWorkExperience(Array.isArray(workExperienceOptions) ? workExperienceOptions : []);
+    }, [workExperienceOptions]);
+
+    React.useEffect(() => {
+        if (!safeInterviewTypes || safeInterviewTypes.length === 0) {
+            fetchPublicInterviewTypes()
+                .then(res => setSafeInterviewTypes(Array.isArray(res.data) ? res.data : []))
+                .catch(() => setSafeInterviewTypes([]));
+        }
+    }, [safeInterviewTypes?.length]);
+
+    React.useEffect(() => {
+        if (!safeWorkExperience || safeWorkExperience.length === 0) {
+            fetchPublicWorkExperienceLevels()
+                .then(res => setSafeWorkExperience(Array.isArray(res.data) ? res.data : []))
+                .catch(() => setSafeWorkExperience([]));
+        }
+    }, [safeWorkExperience?.length]);
+
+    React.useEffect(() => {
+        if (manualResetTick > 0) {
+            setActiveCompany(null);
+        }
+    }, [manualResetTick]);
+
+    React.useEffect(() => {
+        // External selections coming from main form should not influence card state, but we keep placeholder for future sync.
+    }, [externalSelections]);
 
     const handleCardSelection = (companyName) => {
         setActiveCompany(companyName);
+        if (typeof onInteract === 'function') {
+            onInteract({ company: companyName });
+        }
     };
 
     return (
         <section className="trending-companies-section card">
-            <h2>Top Trending Companies !</h2>
+            <h2>Top Trending Companies</h2>
             <div className="companies-grid">
                 {safeCompanyList.map(company => (
                     <CompanyCard
@@ -114,6 +155,7 @@ const TrendingCompanies = ({
                         isActive={activeCompany === company.name}
                         onCardSelection={handleCardSelection}
                         activeCompany={activeCompany}
+                        onInteract={onInteract}
                     />
                 ))}
             </div>
@@ -132,6 +174,7 @@ const CompanyCard = ({
     isActive,
     onCardSelection,
     activeCompany,
+    onInteract,
 }) => {
     const [selectedRole, setSelectedRole] = React.useState('');
     const [selectedInterviewType, setSelectedInterviewType] = React.useState('');
@@ -250,6 +293,9 @@ const CompanyCard = ({
                 onChange={(value) => {
                     ensureActiveCard();
                     setSelectedInterviewType(value);
+                    if (typeof onInteract === 'function') {
+                        onInteract({ interviewType: value });
+                    }
                 }}
             />
             <CustomDropdown
@@ -260,13 +306,21 @@ const CompanyCard = ({
                 onChange={(value) => {
                     ensureActiveCard();
                     setSelectedWorkExperience(value);
+                    if (typeof onInteract === 'function') {
+                        onInteract({ workExperience: value });
+                    }
                 }}
             />
             <CustomDropdown
                 placeholder={isLoadingRoles ? "Loading roles..." : "Job Role"}
                 value={selectedRole}
                 options={filteredRoles.length > 0 ? filteredRoles : []}
-                onChange={handleRoleSelection}
+                onChange={(value) => {
+                    handleRoleSelection(value);
+                    if (typeof onInteract === 'function') {
+                        onInteract({ jobRole: value });
+                    }
+                }}
                 onOpen={ensureActiveCard}
             />
             <div className="role-confirm-placeholder" style={{ height: showConfirm && isActive ? '52px' : '0px' }}>

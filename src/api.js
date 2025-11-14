@@ -84,6 +84,7 @@ export const fetchAdminSessions = (params = {}) =>
 
 export const fetchAdminPerformanceAnalytics = (params = {}) =>
   adminApi.get('/admin/analytics/performance', { params });
+export const fetchAdminInsights = () => adminApi.get('/admin/analytics/insights');
 
 export const fetchAdminLeaderboard = (params = {}) =>
   adminApi.get('/admin/analytics/leaderboard', { params });
@@ -91,9 +92,43 @@ export const fetchAdminLeaderboard = (params = {}) =>
 export const fetchAdminSessionReport = (sessionId) =>
   adminApi.get(`/admin/session/${sessionId}/detailed`);
 
+export const fetchSessionRating = (sessionId, email) =>
+  backendApi.get(`/students/sessions/${sessionId}/rating`, { params: { student_email: email } });
+
+export const submitSessionRating = (sessionId, email, payload) =>
+  backendApi.post(`/students/sessions/${sessionId}/rating`, payload, { params: { student_email: email } });
+
 // You can also add interceptors here for handling tokens or errors globally
 adminApi.interceptors.request.use(config => {
   // Using the default admin token from your backend configuration
   config.headers.Authorization = 'Bearer admin_secret_123';
   return config;
 });
+
+// UBP metadata and resolver
+export const fetchUniversities = () => backendApi.get('/ubp/universities');
+export const fetchUbpPrograms = (universityName) =>
+  backendApi.get('/ubp/programs', { params: { university_name: universityName } });
+export const fetchUbpBatches = (universityName, programName) =>
+  backendApi.get('/ubp/batches', { params: { university_name: universityName, program_name: programName } });
+export const resolveUbp = (universityName, programName, batchLabel) =>
+  backendApi.get('/ubp/resolve', { params: { university_name: universityName, program_name: programName, batch_label: batchLabel } });
+
+// Interview options cascading from interview_questions table
+export const fetchInterviewIndustries = () => backendApi.get('/interview-options/industries');
+export const fetchInterviewCompanies = (industry) =>
+  backendApi.get('/interview-options/companies', { params: { industry } });
+export const fetchIndustryInterviewTypes = (industry, company) =>
+  backendApi.get('/interview-options/interview-types', { params: { industry, company } });
+export const fetchIndustryWorkExperience = (industry, company, interviewType) =>
+  backendApi.get('/interview-options/work-experience', { params: { industry, company, interview_type: interviewType } });
+export const fetchIndustryJobRoles = (industry, company, interviewType, workExperience, programName) =>
+  backendApi.get('/interview-options/job-roles', {
+    params: {
+      industry,
+      company,
+      interview_type: interviewType,
+      work_experience: workExperience,
+      ...(programName ? { program_name: programName } : {}),
+    },
+  });

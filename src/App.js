@@ -15,6 +15,7 @@ function App() {
     const navigate = useNavigate();
     const location = useLocation();
     const [student, setStudent] = useState(null);
+    const [isHydrated, setIsHydrated] = useState(false);
     const [interviewData, setInterviewData] = useState(null);
     const [showInstructions, setShowInstructions] = useState(false);
     const [dashboardRefresh, setDashboardRefresh] = useState(0);
@@ -24,9 +25,14 @@ function App() {
         if (loggedInStudent) {
             setStudent(JSON.parse(loggedInStudent));
         }
+        setIsHydrated(true);
     }, []);
 
     useEffect(() => {
+        if (!isHydrated) {
+            return;
+        }
+
         const publicRoutes = ['/', '/login', '/register', '/admin'];
 
         if (student) {
@@ -36,7 +42,7 @@ function App() {
         } else if (!publicRoutes.includes(location.pathname)) {
             navigate('/login', { replace: true });
         }
-    }, [student, location.pathname, navigate]);
+    }, [student, location.pathname, navigate, isHydrated]);
 
     const handleLogin = (studentData) => {
         localStorage.setItem('student', JSON.stringify(studentData));
@@ -76,6 +82,7 @@ function App() {
             maxQuestions: data.current_max_questions || null,
             message: data.message,
             sessionStatus: data.status,
+            studentEmail: student?.email || '',
         };
 
         setInterviewData(fullInterviewData);
@@ -109,6 +116,10 @@ function App() {
             }
         );
     };
+
+    if (!isHydrated) {
+        return null;
+    }
 
     return (
         <div className="App">

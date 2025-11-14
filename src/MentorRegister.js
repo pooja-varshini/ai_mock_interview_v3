@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { importStudentsCsv } from './api';
+import React, { useEffect, useState } from 'react';
+import { importStudentsCsv, fetchUniversities, fetchUbpPrograms, fetchUbpBatches, resolveUbp } from './api';
 import './MentorRegister.css';
 
 const MentorRegister = () => {
@@ -8,10 +8,68 @@ const MentorRegister = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
+  // UBP selections
+  const [universities, setUniversities] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [selectedUniversity, setSelectedUniversity] = useState('');
+  const [selectedProgram, setSelectedProgram] = useState('');
+  const [selectedBatch, setSelectedBatch] = useState('');
+  const [loadingMeta, setLoadingMeta] = useState(false);
+
   const handleFileChange = (event) => {
     setFile(event.target.files?.[0] || null);
     setResult(null);
     setError('');
+  };
+
+  useEffect(() => {
+    const loadUniversities = async () => {
+      try {
+        setLoadingMeta(true);
+        const { data } = await fetchUniversities();
+        setUniversities(Array.isArray(data) ? data : []);
+      } catch (e) {
+        setUniversities([]);
+      } finally {
+        setLoadingMeta(false);
+      }
+    };
+    loadUniversities();
+  }, []);
+
+  const onSelectUniversity = async (e) => {
+    const uni = e.target.value || '';
+    setSelectedUniversity(uni);
+    setSelectedProgram('');
+    setSelectedBatch('');
+    setPrograms([]);
+    setBatches([]);
+    if (!uni) return;
+    try {
+      const { data } = await fetchUbpPrograms(uni);
+      setPrograms(Array.isArray(data) ? data : []);
+    } catch {
+      setPrograms([]);
+    }
+  };
+
+  const onSelectProgram = async (e) => {
+    const prog = e.target.value || '';
+    setSelectedProgram(prog);
+    setSelectedBatch('');
+    setBatches([]);
+    if (!selectedUniversity || !prog) return;
+    try {
+      const { data } = await fetchUbpBatches(selectedUniversity, prog);
+      setBatches(Array.isArray(data) ? data : []);
+    } catch {
+      setBatches([]);
+    }
+  };
+
+  const onSelectBatch = (e) => {
+    setSelectedBatch(e.target.value || '');
   };
 
   const handleSubmit = async (event) => {
@@ -24,8 +82,31 @@ const MentorRegister = () => {
       return;
     }
 
+    if (!selectedUniversity || !selectedProgram || !selectedBatch) {
+      setError('Please select University, Program, and Batch before uploading.');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('file', file);
+    try {
+      // Resolve ubp_id to use as program_id for backend import
+      const { data: resolved } = await resolveUbp(selectedUniversity, selectedProgram, selectedBatch);
+      const ubpId = resolved?.ubp_id;
+      if (!ubpId) {
+        setError('Unable to resolve selected University/Program/Batch.');
+        return;
+      }
+      // Provide multiple hints for maximum backend compatibility
+      formData.append('program_id', String(ubpId));
+      formData.append('ubp_id', String(ubpId));
+      formData.append('university_name', selectedUniversity);
+      formData.append('program_name', selectedProgram);
+      formData.append('batch_label', selectedBatch);
+    } catch (e) {
+      setError(e?.response?.data?.detail || 'Failed to resolve UBP selection.');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -41,9 +122,9 @@ const MentorRegister = () => {
 
   const downloadedSample = () => {
     const rows = [
-      ['name', 'email', 'program_name'],
-      ['Jane Doe', 'jane.doe@example.com', 'Computer Science 2025'],
-      ['John Smith', 'john.smith@example.com', 'MBA Leadership 2024'],
+      ['name', 'email'],
+      ['Jane Doe', 'jane.doe@example.com'],
+      ['John Smith', 'john.smith@example.com'],
     ];
 
     const csvContent = rows.map((row) => row.join(',')).join('\n');
@@ -64,7 +145,7 @@ const MentorRegister = () => {
       <div className="mentor-register-card">
         <h1>Register Students</h1>
         <p className="mentor-register-description">
-          Upload a CSV containing student names, emails, and program names. Each student will receive an email with their temporary password.
+          Select the University, Program and Batch, then upload a CSV containing only student name and email. Each student will be assigned to the selected batch program and receive credentials.
         </p>
 
         <div className="mentor-register-help">
@@ -84,17 +165,16 @@ const MentorRegister = () => {
                 <tr>
                   <th>Name*</th>
                   <th>Email*</th>
-                  <th>Program name*</th>
+                  
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>Jane Doe</td>
                   <td>jane.doe@example.com</td>
-                  <td>Computer Science 2025</td>
                 </tr>
                 <tr>
-                  <td colSpan={3} className="mentor-register-table-note">* Required columns. Additional columns will be ignored.</td>
+                  <td colSpan={2} className="mentor-register-table-note">* Required columns. Additional columns will be ignored.</td>
                 </tr>
               </tbody>
             </table>
@@ -110,7 +190,6 @@ const MentorRegister = () => {
             <ul>
               <li>Save the file with UTF-8 encoding and a single header row.</li>
               <li>Ensure there are no duplicate emails in the file.</li>
-              <li>Program names should match exactly with existing programs</li>
               <li>For large batches, split uploads into multiple files of 200 rows each.</li>
             </ul>
           </div>
@@ -123,6 +202,27 @@ const MentorRegister = () => {
         </div>
 
         <form className="mentor-register-form" onSubmit={handleSubmit}>
+          <select value={selectedUniversity} onChange={onSelectUniversity} disabled={isSubmitting || loadingMeta}>
+            <option value="">Select University</option>
+            {universities.map((u) => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+
+          <select value={selectedProgram} onChange={onSelectProgram} disabled={!selectedUniversity || isSubmitting}>
+            <option value="">Select Program</option>
+            {programs.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+
+          <select value={selectedBatch} onChange={onSelectBatch} disabled={!selectedProgram || isSubmitting}>
+            <option value="">Select Batch</option>
+            {batches.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+
           <label className="file-picker">
             <input type="file" accept=".csv" onChange={handleFileChange} disabled={isSubmitting} />
             <span>{file ? file.name : 'Choose CSV file...'}</span>

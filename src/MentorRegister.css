@@ -3,19 +3,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at top, rgba(122, 74, 218, 0.15), transparent 55%),
-    #0f0a1f;
+  background: #15141b;
   padding: 40px 16px;
   color: #f5f5ff;
 }
 
 .mentor-register-card {
   width: min(720px, 100%);
-  background: rgba(20, 13, 40, 0.95);
+  background: #040306;
   border-radius: 18px;
   padding: 36px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(122, 74, 218, 0.4);
+  border: 1px solid rgba(122, 74, 218, 0.45);
   backdrop-filter: blur(12px);
 }
 
@@ -128,12 +127,14 @@
   border-radius: 16px;
   border: 1px solid rgba(202, 168, 255, 0.25);
   padding: 20px;
+  text-align: left;
 }
 
 .mentor-register-tips h3 {
   margin: 0 0 12px;
-  font-size: 1.05rem;
+  font-size: 1rem;
   color: #e9dcff;
+  text-align: left;
 }
 
 .mentor-register-tips ul {
@@ -143,6 +144,9 @@
   display: grid;
   gap: 8px;
   color: rgba(238, 231, 255, 0.85);
+  text-align: left;
+  font-size: 1rem;
+
 }
 
 .mentor-register-actions {
@@ -153,20 +157,23 @@
 
 .sample-button,
 .upload-button {
-  background: linear-gradient(135deg, #5d2ee6, #8e54e9);
-  border: none;
-  color: #fff;
-  padding: 12px 24px;
-  border-radius: 12px;
+  background: var(--color-button-primary);
+  color: var(--color-button-primary-text-dark-surface);
+  padding: 12px 28px;
+  border-radius: 999px;
+  border: 1px solid transparent;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 18px 36px -22px rgba(159, 118, 249, 0.65);
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .sample-button:hover,
 .upload-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(94, 46, 230, 0.35);
+  background: var(--color-button-hover-dark-surface);
+  color: var(--color-button-hover-dark-text);
+  box-shadow: 0 22px 44px -24px rgba(255, 255, 255, 0.35);
 }
 
 .sample-button:disabled,
@@ -179,6 +186,34 @@
 .mentor-register-form {
   display: grid;
   gap: 16px;
+}
+
+.mentor-register-form select {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(138, 109, 255, 0.35);
+  background: rgba(27, 22, 48, 0.92);
+  color: #f1ecff;
+  font-family: var(--font-family-body);
+  font-size: 0.95rem;
+  font-weight: 500;
+  outline: none;
+  box-shadow: 0 12px 24px -20px rgba(159, 118, 249, 0.4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.mentor-register-form select:focus,
+.mentor-register-form select:focus-visible {
+  border-color: rgba(182, 143, 255, 0.85);
+  box-shadow: 0 16px 28px -18px rgba(168, 130, 255, 0.55);
+  background: rgba(36, 29, 64, 0.95);
+}
+
+.mentor-register-form select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .file-picker {

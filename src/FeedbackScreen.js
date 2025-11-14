@@ -212,7 +212,6 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
         }
         return [];
     }, [feedback]);
-    const overallSummary = feedback.structured?.overall_summary;
     const mandatorySkills = useMemo(() => {
         if (!hasStructured) {
             return [];

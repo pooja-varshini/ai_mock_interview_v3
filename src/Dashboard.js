@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   interviewApi,
   adminApi,
   fetchProgramJobRoles,
-  fetchPublicInterviewTypes,
-  fetchPublicWorkExperienceLevels,
   fetchStudentProfile,
+  fetchInterviewIndustries,
+  fetchInterviewCompanies,
+  fetchIndustryInterviewTypes,
+  fetchIndustryWorkExperience,
+  fetchIndustryJobRoles,
 } from './api';
 import './Dashboard.css';
 import FeedbackScreen from './FeedbackScreen';
@@ -165,11 +168,11 @@ const ReattemptPrompt = ({
 };
 
 export default function Dashboard({ student, onLogout, onInterviewStart, addToast, refreshToken = 0 }) {
-  const [jobRole, setJobRole] = useState('');
   const [industryType, setIndustryType] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [interviewType, setInterviewType] = useState('');
   const [workExperience, setWorkExperience] = useState('');
+  const [jobRole, setJobRole] = useState('');
   
   const [sessions, setSessions] = useState([]);
   const [attemptIndexBySession, setAttemptIndexBySession] = useState({});
@@ -186,6 +189,11 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
   const [isStarting, setIsStarting] = useState(false);
   const [reattemptPrompt, setReattemptPrompt] = useState({ open: false, sessions: [], message: '' });
   const [highlightSessionId, setHighlightSessionId] = useState(null);
+
+  const [trendingContext, setTrendingContext] = useState({ company: '', industry: '', interviewType: '', workExperience: '' });
+  const [manualFormChangeTick, setManualFormChangeTick] = useState(0);
+  const clearingViaCardRef = useRef(false);
+  const isManuallyChangingRef = useRef(false);  // ADD THIS LINE
 
   useEffect(() => {
     const loadProgramInfo = async () => {
@@ -218,6 +226,7 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
                   program_name: profile.program_name || null,
                   job_roles: Array.isArray(profile.job_roles) ? profile.job_roles.filter(Boolean) : [],
                 };
+
               }
             }
           } catch (profileError) {
@@ -270,33 +279,40 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
   }, [student]);
 
   useEffect(() => {
+  if (isManuallyChangingRef.current) {
+    isManuallyChangingRef.current = false;
+    return;
+  }
+
+  if (
+    (trendingContext.company && trendingContext.company.length) ||
+    (trendingContext.interviewType && trendingContext.interviewType.length) ||
+    (trendingContext.workExperience && trendingContext.workExperience.length)
+  ) {
+    if (industryType || companyName || interviewType || workExperience || jobRole) {
+      clearingViaCardRef.current = true;
+      resetTrendingSelections();
+      setIndustryType('');
+      setCompanyName('');
+      setInterviewType('');
+      setWorkExperience('');
+      setJobRole('');
+      setAllCompanies([]);
+      setAllInterviewTypes([]);
+      setWorkExperienceOptions([]);
+      setAllRoles([]);
+      setTimeout(() => {
+        clearingViaCardRef.current = false;
+      }, 0);
+    }
+  }
+}, [trendingContext, industryType, companyName, interviewType, workExperience, jobRole]);
+
+  useEffect(() => {
     const fetchData = async () => {
       try {
-        const requests = [
-          adminApi.get('/admin/industry-types'),
-          adminApi.get('/admin/company-names'),
-        ];
-
-        const hasProgramContext = Boolean(student?.program_id);
-
-        if (hasProgramContext) {
-          requests.push(fetchPublicInterviewTypes({ programId: student.program_id }));
-          requests.push(fetchPublicWorkExperienceLevels({ programId: student.program_id }));
-        } else {
-          requests.push(fetchPublicInterviewTypes());
-          requests.push(fetchPublicWorkExperienceLevels());
-        }
-
-        const [industriesRes, companiesRes, interviewTypesRes, workExperienceRes] = await Promise.all(requests);
-
-        setAllIndustries([...new Set(industriesRes.data)]);
-        setAllCompanies([...new Set(companiesRes.data)]);
-
-        const nextInterviewTypes = interviewTypesRes?.data;
-        const nextWorkExp = workExperienceRes?.data;
-
-        setAllInterviewTypes(Array.isArray(nextInterviewTypes) ? [...new Set(nextInterviewTypes)] : []);
-        setWorkExperienceOptions(Array.isArray(nextWorkExp) ? [...new Set(nextWorkExp)] : []);
+        const industriesRes = await fetchInterviewIndustries();
+        setAllIndustries(Array.isArray(industriesRes.data) ? industriesRes.data : []);
 
         // Fetch data for the records and leaderboard
         if (student && student.email) {
@@ -347,10 +363,107 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
   }, [student, refreshToken]);
 
   useEffect(() => {
-    if (!jobRole && allRoles.length > 0) {
-      setJobRole(allRoles[0]);
+    if (clearingViaCardRef.current) {
+      return;
     }
-  }, [allRoles, jobRole]);
+    setCompanyName('');
+    setInterviewType('');
+    setWorkExperience('');
+    setJobRole('');
+    setAllCompanies([]);
+    setAllInterviewTypes([]);
+    setWorkExperienceOptions([]);
+    setAllRoles([]);
+    setManualFormChangeTick((tick) => tick + 1);
+    resetTrendingSelections();
+
+    if (!industryType) {
+      return;
+    }
+
+    fetchInterviewCompanies(industryType)
+      .then((res) => {
+        setAllCompanies(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch((error) => {
+        console.error('Failed to fetch companies:', error);
+        setAllCompanies([]);
+      });
+  }, [industryType]);
+
+  useEffect(() => {
+    if (clearingViaCardRef.current) {
+      return;
+    }
+    setInterviewType('');
+    setWorkExperience('');
+    setJobRole('');
+    setAllInterviewTypes([]);
+    setWorkExperienceOptions([]);
+    setAllRoles([]);
+    setManualFormChangeTick((tick) => tick + 1);
+    resetTrendingSelections();
+
+    if (!industryType || !companyName) {
+      return;
+    }
+
+    fetchIndustryInterviewTypes(industryType, companyName)
+      .then((res) => {
+        setAllInterviewTypes(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch((error) => {
+        console.error('Failed to fetch interview types:', error);
+        setAllInterviewTypes([]);
+      });
+  }, [industryType, companyName]);
+
+  useEffect(() => {
+    if (clearingViaCardRef.current) {
+      return;
+    }
+    setWorkExperience('');
+    setJobRole('');
+    setWorkExperienceOptions([]);
+    setAllRoles([]);
+
+    if (!industryType || !companyName || !interviewType) {
+      return;
+    }
+
+    fetchIndustryWorkExperience(industryType, companyName, interviewType)
+      .then((res) => {
+        setWorkExperienceOptions(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch((error) => {
+        console.error('Failed to fetch work experience options:', error);
+        setWorkExperienceOptions([]);
+      });
+  }, [industryType, companyName, interviewType]);
+
+  useEffect(() => {
+    setJobRole('');
+    setAllRoles([]);
+
+    if (!industryType || !companyName || !interviewType || !workExperience) {
+      return;
+    }
+
+    fetchIndustryJobRoles(
+      industryType,
+      companyName,
+      interviewType,
+      workExperience,
+      programInfo?.program_name || student?.program_name || null
+    )
+      .then((res) => {
+        setAllRoles(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch((error) => {
+        console.error('Failed to fetch job roles for selection:', error);
+        setAllRoles([]);
+      });
+  }, [industryType, companyName, interviewType, workExperience, programInfo?.program_name, student?.program_name]);
 
   const formatStatus = (status) => {
     if (!status) return 'N/A';
@@ -376,9 +489,16 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
     return 'score-average';
   };
 
-  const handleTrendingRoleSelect = (company, role) => {
-    setCompanyName(company);
-    setJobRole(role);
+  const resetTrendingSelections = () => {
+    setTrendingContext({ company: '', industry: '', interviewType: '', workExperience: '' });
+  };
+
+  const handleTrendingInteraction = (payload) => {
+    setTrendingContext((prev) => ({ ...prev, ...payload }));
+  };
+
+  const handleTrendingRoleSelect = (companyName, role) => {
+    handleTrendingInteraction({ company: companyName, jobRole: role });
   };
 
   const quickStartFromTrending = ({ company, role, industry, interviewType: selectedType, workExperience: selectedExperience, reset }) => {
@@ -386,24 +506,23 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
       addToast('Please pick a role, interview type, and work experience before launching.', 'error');
       return;
     }
-    setCompanyName(company);
-    setJobRole(role);
-    if (industry) {
-      setIndustryType(industry);
-    }
-    setInterviewType(selectedType);
-    setWorkExperience(selectedExperience);
-    startInterview(false, {
-      jobRole: role,
+    handleTrendingInteraction({ company, jobRole: role, interviewType: selectedType, workExperience: selectedExperience });
+    startInterview(true, {
       companyName: company,
+      jobRole: role,
       industryType: industry || industryType,
       interviewType: selectedType,
       workExperience: selectedExperience,
-    }).finally(() => {
-      if (typeof reset === 'function') {
-        reset();
-      }
-    });
+    })
+      .then(() => {
+        if (reset) {
+          reset();
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to start interview from trending company:', error);
+        addToast('Failed to start interview. Please try again.', 'error');
+      });
   };
 
   const handleViewReport = (selectedSessionId) => {
@@ -537,6 +656,9 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
               programName={programInfo?.program_name || ''}
               onSelectRole={handleTrendingRoleSelect}
               onQuickStart={quickStartFromTrending}
+              onInteract={handleTrendingInteraction}
+              manualResetTick={manualFormChangeTick}
+              externalSelections={trendingContext}
             />
             <section className="start-interview-section card">
               <h2>Start Interview Session</h2>
@@ -544,31 +666,102 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
                 Program: <strong>{programInfo?.program_name || 'Not assigned'}</strong>
               </p>
               <div className="session-inputs">
-                <select value={jobRole} onChange={(e) => setJobRole(e.target.value)}>
-                  <option value="">Select Job Role</option>
-                  {allRoles.map(role => <option key={role} value={role}>{role}</option>)}
-                </select>
-                <select value={industryType} onChange={(e) => setIndustryType(e.target.value)}>
+                <select
+                 value={industryType}
+                 onChange={(e) => {
+                   isManuallyChangingRef.current = true;
+                   resetTrendingSelections();
+                   setIndustryType(e.target.value);
+                 }}
+                >
                   <option value="">Select Industry</option>
-                  {allIndustries.map(industry => <option key={industry} value={industry}>{industry}</option>)}
+                  {allIndustries.map((industry) => (
+                    <option key={industry} value={industry}>
+                      {industry}
+                    </option>
+                  ))}
                 </select>
-                <select value={companyName} onChange={(e) => setCompanyName(e.target.value)}>
+
+                <select
+                  value={companyName}
+                  onChange={(e) => {
+                    isManuallyChangingRef.current = true;
+                    resetTrendingSelections();
+                    setCompanyName(e.target.value);
+                  }}
+                  disabled={!industryType}
+                >
                   <option value="">Select Company</option>
-                  {allCompanies.map(company => <option key={company} value={company}>{company}</option>)}
+                  {allCompanies.map((company) => (
+                    <option key={company} value={company}>
+                      {company}
+                    </option>
+                  ))}
                 </select>
-                <select value={interviewType} onChange={(e) => setInterviewType(e.target.value)}>
+
+                <select
+                  value={interviewType}
+                  onChange={(e) => {
+                    isManuallyChangingRef.current = true;
+                    resetTrendingSelections();
+                    setInterviewType(e.target.value);
+                  }} 
+                  disabled={!industryType || !companyName}
+                >
                   <option value="">Select Interview Type</option>
                   {allInterviewTypes.map((type) => (
-                    <option key={type} value={type}>{type}</option>
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
                   ))}
                 </select>
-                <select value={workExperience} onChange={(e) => setWorkExperience(e.target.value)}>
+
+                <select
+                  value={workExperience}
+                  onChange={(e) => { 
+                    isManuallyChangingRef.current = true;
+                    resetTrendingSelections();
+                    setWorkExperience(e.target.value);
+                  }} 
+                  disabled={!industryType || !companyName || !interviewType}
+                >
                   <option value="">Select Work Experience</option>
                   {workExperienceOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
                   ))}
                 </select>
-                <button onClick={() => startInterview()} className="start-button" disabled={isStarting}>
+
+                <select
+                  value={jobRole}
+                  onChange={(e) => {
+                    isManuallyChangingRef.current = true;
+                    resetTrendingSelections();
+                    setJobRole(e.target.value);
+                  }}
+                  disabled={!industryType || !companyName || !interviewType || !workExperience}
+                >
+                  <option value="">Select Job Role</option>
+                  {allRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={() => startInterview()}
+                  className="start-button"
+                  disabled={
+                    isStarting ||
+                    !industryType ||
+                    !companyName ||
+                    !interviewType ||
+                    !workExperience ||
+                    !jobRole
+                  }
+                >
                   {isStarting ? 'Starting…' : 'Start Interview'}
                 </button>
               </div>

@@ -217,7 +217,6 @@ export default function CodingWorkspace({
   const [runtimes, setRuntimes] = useState([]);
   const [selectedRuntimeKey, setSelectedRuntimeKey] = useState(null);
   const [loadingRuntimes, setLoadingRuntimes] = useState(true);
-  const [runtimesError, setRuntimesError] = useState(null);
   const [userLanguageOverride, setUserLanguageOverride] = useState(false);
   const [languageCodeMap, setLanguageCodeMap] = useState({});
   const [manualInputEnabled, setManualInputEnabled] = useState(false);
@@ -252,25 +251,6 @@ export default function CodingWorkspace({
   }, [runtimes, selectedRuntimeKey]);
 
   const monacoLanguageId = useMemo(() => getMonacoLanguageId(selectedRuntime), [selectedRuntime]);
-
-  const runtimeStatusText = useMemo(() => {
-    if (runtimesError) {
-      return 'Execution service unavailable';
-    }
-    if (loadingRuntimes) {
-      return 'Loading runtimes…';
-    }
-    if (!selectedRuntime) {
-      return 'Select a language';
-    }
-    return `${selectedRuntime.language} ${selectedRuntime.version}`;
-  }, [loadingRuntimes, runtimesError, selectedRuntime]);
-
-  const runtimeStatusClass = runtimesError
-    ? 'error'
-    : loadingRuntimes
-      ? 'loading'
-      : 'ready';
 
   const runtimeDisabled = isRunning || loadingRuntimes || !selectedRuntime;
   const submitDisabled = isSubmitting;
@@ -328,7 +308,6 @@ export default function CodingWorkspace({
   useEffect(() => {
     let cancelled = false;
     setLoadingRuntimes(true);
-    setRuntimesError(null);
 
     fetchPistonRuntimes()
       .then((response) => {
@@ -342,7 +321,6 @@ export default function CodingWorkspace({
       .catch((error) => {
         if (cancelled) return;
         console.error('Failed to fetch Piston runtimes:', error);
-        setRuntimesError(error);
         setLoadingRuntimes(false);
       });
 
@@ -394,7 +372,15 @@ export default function CodingWorkspace({
         setSelectedRuntimeKey(runtimeToKey(firstAllowed));
       }
     }
-  }, [runtimes, normalizedDefaultLanguage, normalizedSupportedLanguages, selectedRuntimeKey, userLanguageOverride]);
+  }, [
+    runtimes,
+    normalizedDefaultLanguage,
+    normalizedSupportedLanguages,
+    selectedRuntimeKey,
+    userLanguageOverride,
+    effectiveCoreLanguages,
+    enforceSqlOnly,
+  ]);
 
   useEffect(() => {
     setLanguageCodeMap({});
@@ -700,7 +686,7 @@ export default function CodingWorkspace({
       key: runtimeToKey(runtime),
       label: formatLanguageLabel(runtime.language),
     }));
-  }, [runtimes, normalizedSupportedLanguages]);
+  }, [runtimes, normalizedSupportedLanguages, effectiveCoreLanguages, enforceSqlOnly]);
 
   return (
     <div className={workspaceClassName}>
