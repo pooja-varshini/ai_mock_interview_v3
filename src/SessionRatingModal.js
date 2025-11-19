@@ -5,8 +5,7 @@ export default function SessionRatingModal({
   isOpen,
   defaultRating = 0,
   defaultComments = '',
-  onSubmit,
-  onSkip,
+  onSubmit
 }) {
   const [rating, setRating] = useState(defaultRating);
   const [comments, setComments] = useState(defaultComments);
@@ -41,11 +40,6 @@ export default function SessionRatingModal({
   const handleRatingClick = (value) => {
     setRating(value);
     if (error) setError('');
-  };
-
-  const handleSkip = () => {
-    if (isSubmitting) return;
-    onSkip?.();
   };
 
   if (!isOpen) return null;
@@ -94,14 +88,6 @@ export default function SessionRatingModal({
           {error && <p className="session-rating-modal__error" role="alert">{error}</p>}
 
           <footer className="session-rating-modal__actions">
-            <button
-              type="button"
-              className="session-rating-modal__button session-rating-modal__button--ghost"
-              onClick={handleSkip}
-              disabled={isSubmitting}
-            >
-              Skip for now
-            </button>
             <button
               type="submit"
               className="session-rating-modal__button session-rating-modal__button--primary"

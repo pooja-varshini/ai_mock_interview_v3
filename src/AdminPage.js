@@ -58,7 +58,7 @@ const getScoreClass = (score) => {
   return 'admin-score admin-score--average';
 };
 
-const AdminPage = () => {
+const AdminPage = ({ admin, onLogout }) => {
   const [stats, setStats] = useState(null);
   const [students, setStudents] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -404,6 +404,18 @@ const AdminPage = () => {
               Analytics
             </button>
           </nav>
+          {admin && (
+            <footer className="admin-sidebar__footer" aria-label="Admin actions">
+              <div className="admin-sidebar__account">
+                <span className="admin-account-name">{admin.display_name || admin.email}</span>
+                {onLogout && (
+                  <button type="button" className="admin-button-text admin-button-text--logout" onClick={onLogout}>
+                    Logout
+                  </button>
+                )}
+              </div>
+            </footer>
+          )}
         </aside>
 
         <section

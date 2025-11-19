@@ -299,6 +299,15 @@
     letter-spacing: 0.12em;
     color: #c8c0f8;
     margin-bottom: 5px;
+    text-align: center;
+}
+
+.detail-block {
+    text-align: left;
+}
+
+.detail-block + .detail-block {
+    margin-top: 16px;
 }
 
 .detail-block ul {
@@ -307,12 +316,14 @@
     display: grid;
     gap: 6px;
     list-style: none;
+    justify-items: flex-start;
 }
 
 .detail-block li {
     color: #e4ddff;
     line-height: 1.55;
     font-size: 0.9rem;
+    text-align: left;
 }
 
 .accordion-item:focus-within {
@@ -325,6 +336,7 @@
     line-height: 1.6;
     margin: 0;
     font-size: 0.9rem;
+    text-align: left;
 }
 
 .summary-grid {

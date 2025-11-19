@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   interviewApi,
   adminApi,
@@ -51,6 +51,41 @@ const ordinal = (value) => {
       return `${v}rd`;
     default:
       return `${v}th`;
+  }
+};
+
+const formatScoreDisplay = (value, decimals = 2, emptyLabel = 'N/A') => {
+  if (value === null || value === undefined) {
+    return emptyLabel;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return emptyLabel;
+  }
+  const rounded = Number(numeric.toFixed(decimals));
+  if (Number.isInteger(rounded)) {
+    return String(rounded);
+  }
+  return rounded.toFixed(decimals);
+};
+
+const formatISTDateTime = (value) => {
+  if (!value) return 'N/A';
+  try {
+    const istFormatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+    return istFormatter.format(new Date(value));
+  } catch (error) {
+    console.warn('Failed to format date in IST, falling back to local time.', error);
+    return new Date(value).toLocaleString();
   }
 };
 
@@ -122,29 +157,17 @@ const ReattemptPrompt = ({
                   <div className="reattempt-session-timestamps">
                     <div>
                       <label>Started</label>
-                      <span>{session.started_at ? new Date(session.started_at).toLocaleString() : 'N/A'}</span>
+                      <span>{formatISTDateTime(session.started_at)}</span>
                     </div>
                     <div>
                       <label>Completed</label>
-                      <span>{session.completed_at ? new Date(session.completed_at).toLocaleString() : 'N/A'}</span>
+                      <span>{formatISTDateTime(session.completed_at)}</span>
                     </div>
                   </div>
                   <div className="reattempt-session-scores">
                     <div>
                       <label>Overall</label>
-                      <span>{session.overall_score != null ? Number(session.overall_score).toFixed(2) : 'N/A'}</span>
-                    </div>
-                    <div>
-                      <label>Technical</label>
-                      <span>{session.technical_score != null ? Number(session.technical_score).toFixed(2) : 'N/A'}</span>
-                    </div>
-                    <div>
-                      <label>Communication</label>
-                      <span>{session.communication_score != null ? Number(session.communication_score).toFixed(2) : 'N/A'}</span>
-                    </div>
-                    <div>
-                      <label>Attitude</label>
-                      <span>{session.attitude_score != null ? Number(session.attitude_score).toFixed(2) : 'N/A'}</span>
+                      <span>{formatScoreDisplay(session.overall_score)}</span>
                     </div>
                   </div>
                 </div>
@@ -187,7 +210,18 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
   const [leaderboard, setLeaderboard] = useState([]);
   const [selectedSession, setSelectedSession] = useState(null);
   const [isStarting, setIsStarting] = useState(false);
-  const [reattemptPrompt, setReattemptPrompt] = useState({ open: false, sessions: [], message: '' });
+  const [reattemptPrompt, setReattemptPrompt] = useState({
+    open: false,
+    sessions: [],
+    message: '',
+    jobRole: '',
+    companyName: '',
+    industryType: '',
+    interviewType: '',
+    workExperience: '',
+    attemptLookup: {},
+    isFromCompanyCard: false
+  });
   const [highlightSessionId, setHighlightSessionId] = useState(null);
 
   const [trendingContext, setTrendingContext] = useState({ company: '', industry: '', interviewType: '', workExperience: '' });
@@ -321,15 +355,47 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
           const completedSessions = allSessions.filter((session) =>
             session && typeof session.status === 'string' && session.status.toLowerCase() === 'completed'
           );
+          const uniqueCompletedSessions = [];
+          const seenSessionIds = new Set();
+          completedSessions.forEach((session) => {
+            if (!session || !session.session_id) {
+              return;
+            }
+            if (!seenSessionIds.has(session.session_id)) {
+              seenSessionIds.add(session.session_id);
+              uniqueCompletedSessions.push(session);
+            }
+          });
+
           const grouped = new Map();
-          completedSessions
-            .sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0))
+          // Group sessions by all relevant fields to ensure proper attempt counting
+          const normalize = (value) => (value || '').toString().trim().toLowerCase();
+          const normalizeDate = (value) => {
+            if (!value) return null;
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? null : date;
+          };
+
+          uniqueCompletedSessions
+            .sort((a, b) => {
+              const dateA = normalizeDate(a.started_at);
+              const dateB = normalizeDate(b.started_at);
+              if (!dateA && !dateB) return 0;
+              if (!dateA) return -1;
+              if (!dateB) return 1;
+              return dateA - dateB;
+            })
             .forEach((session) => {
+              const studentIdentifier = normalize(
+                session.student_email || (student && student.email) || session.student_id
+              );
               const key = [
-                session.student_id || (student && student.email) || '',
-                session.job_role || '',
-                session.company_name || '',
-                session.industry_type || ''
+                studentIdentifier,
+                normalize(session.job_role),
+                normalize(session.company_name),
+                normalize(session.industry_type),
+                normalize(session.interview_type),
+                normalize(session.work_experience)
               ].join('::');
               if (!grouped.has(key)) {
                 grouped.set(key, []);
@@ -337,16 +403,36 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
               grouped.get(key).push(session);
             });
 
+          // Create attempt lookup with proper numbering
           const attemptLookup = {};
-          grouped.forEach((list) => {
-            list.forEach((session, index) => {
-              attemptLookup[session.session_id] = index + 1;
-            });
+          grouped.forEach((sessions) => {
+            // Sort sessions by started_at to determine attempt numbers
+            sessions
+              .sort((a, b) => {
+                const dateA = normalizeDate(a.started_at);
+                const dateB = normalizeDate(b.started_at);
+                if (!dateA && !dateB) return 0;
+                if (!dateA) return -1;
+                if (!dateB) return 1;
+                return dateA - dateB;
+              })
+              .forEach((session, index) => {
+                attemptLookup[session.session_id] = index + 1;
+              });
           });
 
           setAttemptIndexBySession(attemptLookup);
           setSessions(
-            completedSessions.sort((a, b) => new Date(b.started_at || 0) - new Date(a.started_at || 0))
+            uniqueCompletedSessions
+              .slice()
+              .sort((a, b) => {
+                const dateA = normalizeDate(a.started_at);
+                const dateB = normalizeDate(b.started_at);
+                if (!dateA && !dateB) return 0;
+                if (!dateA) return 1;
+                if (!dateB) return -1;
+                return dateB - dateA;
+              })
           );
         } else {
           setSessions([]);
@@ -507,12 +593,13 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
       return;
     }
     handleTrendingInteraction({ company, jobRole: role, interviewType: selectedType, workExperience: selectedExperience });
-    startInterview(true, {
+    startInterview(false, {  // Changed from true to false to allow reattempt check
       companyName: company,
       jobRole: role,
       industryType: industry || industryType,
       interviewType: selectedType,
       workExperience: selectedExperience,
+      isFromCompanyCard: true  // Add this flag to indicate this is from a company card
     })
       .then(() => {
         if (reset) {
@@ -539,6 +626,7 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
     const effectiveIndustryType = overrides.industryType ?? industryType;
     const effectiveInterviewType = overrides.interviewType ?? interviewType;
     const effectiveWorkExperience = overrides.workExperience ?? workExperience;
+    const isFromCompanyCard = overrides.isFromCompanyCard ?? false;
 
     if (!effectiveJobRole || !effectiveCompanyName || !effectiveInterviewType || !effectiveWorkExperience) {
       addToast('Please select a Job Role, Company, Interview Type, and Work Experience to start.', 'error');
@@ -547,6 +635,12 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
     setIsStarting(true);
     try {
       const params = new URLSearchParams();
+      const headers = {};
+      
+      if (isFromCompanyCard) {
+        headers['X-Request-Source'] = 'company-card';
+      }
+      
       params.append('student_name', student ? student.name : 'Anonymous User');
       params.append('student_email', student ? student.email : 'anonymous@example.com');
       params.append('job_role', effectiveJobRole);
@@ -558,35 +652,66 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
         params.append('force_reattempt', 'true');
       }
 
-      const response = await interviewApi.post('/interview/start', params);
+      const response = await interviewApi.post('/interview/start', params, { headers });
       const data = response.data || {};
 
+      const normalizeDate = (value) => {
+        if (!value) return null;
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
+      };
+
       if (!force && data.requires_confirmation) {
-        const existingSessions = Array.isArray(data.existing_sessions)
+        const existingSessionsRaw = Array.isArray(data.existing_sessions)
           ? data.existing_sessions.filter(
               (session) =>
                 session && typeof session.status === 'string' && session.status.toLowerCase() === 'completed'
             )
           : [];
+
+        const uniqueSessions = [];
+        const seenSessionIds = new Set();
+        existingSessionsRaw.forEach((session) => {
+          if (!session || !session.session_id) {
+            return;
+          }
+          if (!seenSessionIds.has(session.session_id)) {
+            seenSessionIds.add(session.session_id);
+            uniqueSessions.push(session);
+          }
+        });
+
+        uniqueSessions.sort((a, b) => {
+          const dateA = normalizeDate(a.started_at);
+          const dateB = normalizeDate(b.started_at);
+          if (!dateA && !dateB) return 0;
+          if (!dateA) return -1;
+          if (!dateB) return 1;
+          return dateA - dateB;
+        });
+
         const reattemptAttemptLookup = { ...attemptIndexBySession };
-        existingSessions
-          .slice()
-          .sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0))
-          .forEach((session, index) => {
-            if (!reattemptAttemptLookup[session.session_id]) {
-              reattemptAttemptLookup[session.session_id] = index + 1;
-            }
-          });
-        const latestSession = existingSessions[0];
+        uniqueSessions.forEach((session, index) => {
+          if (!reattemptAttemptLookup[session.session_id]) {
+            reattemptAttemptLookup[session.session_id] = index + 1;
+          }
+        });
+        const latestSession = uniqueSessions[0] || null;
         setHighlightSessionId(latestSession ? latestSession.session_id : null);
         setReattemptPrompt({
           open: true,
-          sessions: existingSessions,
+          sessions: uniqueSessions,
           message: data.message || 'Existing attempts found for this combination.',
           jobRole: effectiveJobRole,
           companyName: effectiveCompanyName,
           industryType: effectiveIndustryType,
-          attemptLookup: reattemptAttemptLookup
+          interviewType: effectiveInterviewType,
+          workExperience: effectiveWorkExperience,
+          attemptLookup: {
+            ...attemptIndexBySession,
+            ...reattemptAttemptLookup
+          },
+          isFromCompanyCard
         });
         addToast('Existing attempt detected. Confirm reattempt to continue.', 'info');
         return;
@@ -601,7 +726,18 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
         work_experience: data.work_experience ? data.work_experience : effectiveWorkExperience,
       };
 
-      setReattemptPrompt({ open: false, sessions: [], message: '', jobRole: '', companyName: '', industryType: '', attemptLookup: {} });
+      setReattemptPrompt({
+        open: false,
+        sessions: [],
+        message: '',
+        jobRole: '',
+        companyName: '',
+        industryType: '',
+        interviewType: '',
+        workExperience: '',
+        attemptLookup: {},
+        isFromCompanyCard: false
+      });
       setHighlightSessionId(null);
 
       // Use the onInterviewStart prop passed from App.js
@@ -616,15 +752,44 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
 
   const confirmReattempt = async () => {
     try {
-      await startInterview(true);
+      await startInterview(true, {
+        jobRole: reattemptPrompt.jobRole,
+        companyName: reattemptPrompt.companyName,
+        industryType: reattemptPrompt.industryType,
+        interviewType: reattemptPrompt.interviewType,
+        workExperience: reattemptPrompt.workExperience,
+        isFromCompanyCard: reattemptPrompt.isFromCompanyCard
+      });
     } finally {
-      setReattemptPrompt({ open: false, sessions: [], message: '', jobRole: '', companyName: '', industryType: '', attemptLookup: {} });
+      setReattemptPrompt({
+        open: false,
+        sessions: [],
+        message: '',
+        jobRole: '',
+        companyName: '',
+        industryType: '',
+        interviewType: '',
+        workExperience: '',
+        attemptLookup: {},
+        isFromCompanyCard: false
+      });
       setHighlightSessionId(null);
     }
   };
 
   const cancelReattempt = () => {
-    setReattemptPrompt({ open: false, sessions: [], message: '', jobRole: '', companyName: '', industryType: '', attemptLookup: {} });
+    setReattemptPrompt({
+      open: false,
+      sessions: [],
+      message: '',
+      jobRole: '',
+      companyName: '',
+      industryType: '',
+      interviewType: '',
+      workExperience: '',
+      attemptLookup: {},
+      isFromCompanyCard: false
+    });
     setHighlightSessionId(null);
   };
 
@@ -774,6 +939,7 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
                   <div>Interview Role</div>
                   <div>Company</div>
                   <div>Interview Type</div>
+                  <div>Work Experience</div>
                   <div>Date & Time</div>
                   <div>Score</div>
                   <div>Status</div>
@@ -804,9 +970,10 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
                         </div>
                         <div>{session.company_name || 'N/A'}</div>
                         <div>{session.interview_type || 'N/A'}</div>
-                        <div>{session.started_at ? new Date(session.started_at).toLocaleString() : 'N/A'}</div>
+                        <div>{session.work_experience || 'N/A'}</div>
+                        <div>{formatISTDateTime(session.started_at)}</div>
                         <div className={getScoreClass(session.overall_score)}>
-                          {session.overall_score != null ? `${Number(session.overall_score).toFixed(2)}` : 'N/A'}
+                          {formatScoreDisplay(session.overall_score)}
                         </div>
                         <div className={getStatusClass(session.status)}>
                           {formatStatus(session.status)}
@@ -844,7 +1011,7 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
                     <div className={`table-row ${entry.student_name === (student && student.name) ? 'current-user-row' : ''}`} key={entry.rank}>
                         <div>{entry.rank}</div>
                         <div>{entry.student_name}</div>
-                        <div className={getScoreClass(entry.avg_score)}>{entry.avg_score != null ? entry.avg_score.toFixed(2) : 'N/A'}</div>
+                        <div className={getScoreClass(entry.avg_score)}>{formatScoreDisplay(entry.avg_score)}</div>
                         <div>{entry.total_sessions}</div>
                     </div>
                 ))}

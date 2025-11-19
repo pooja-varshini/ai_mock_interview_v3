@@ -65,7 +65,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const displayCompany = companyName && companyName.trim() !== '' ? companyName : 'Any Company';
     const formattedIndustry = (() => {
         if (!industryType || industryType.trim() === '' || industryType.trim().toLowerCase() === 'n/a') {
-            return 'Any';
+            return 'N/A';
         }
         return industryType;
     })();
@@ -87,7 +87,6 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
     const [existingRating, setExistingRating] = useState({ rating: 0, comments: '' });
     const [ratingLoaded, setRatingLoaded] = useState(false);
-    const [hasSkippedRating, setHasSkippedRating] = useState(false);
 
     // Refs for speech recognition and text area focus management
     const recognitionRef = useRef(null);
@@ -211,13 +210,13 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
     useEffect(() => {
         if (isComplete) {
-            if (existingRating.rating > 0 || hasSkippedRating) {
+            if (existingRating.rating > 0) {
                 setIsRatingModalOpen(false);
             } else {
                 setIsRatingModalOpen(true);
             }
         }
-    }, [isComplete, ratingLoaded, existingRating.rating, hasSkippedRating]);
+    }, [isComplete, ratingLoaded, existingRating.rating]);
 
     const handleMicClick = () => {
         if (isRecording) {
@@ -241,7 +240,6 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             await submitSessionRating(sessionId, interviewData.studentEmail, { rating, comments });
             addToast('Thank you for rating your interview!', 'success');
             setExistingRating({ rating, comments: comments || '' });
-            setHasSkippedRating(false);
             setIsRatingModalOpen(false);
         } catch (error) {
             console.error('Failed to submit session rating:', error);
@@ -251,13 +249,8 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         }
     };
 
-    const handleRatingSkip = () => {
-        setIsRatingModalOpen(false);
-        setHasSkippedRating(true);
-    };
-
     const handleReturnToDashboard = () => {
-        if (existingRating.rating > 0 || hasSkippedRating) {
+        if (existingRating.rating > 0) {
             onInterviewEnd(sessionId);
         } else {
             setIsRatingModalOpen(true);
@@ -538,7 +531,6 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                         defaultRating={existingRating.rating}
                         defaultComments={existingRating.comments}
                         onSubmit={handleRatingSubmit}
-                        onSkip={handleRatingSkip}
                     />
                 </div>
             );
@@ -554,7 +546,6 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                     defaultRating={existingRating.rating}
                     defaultComments={existingRating.comments}
                     onSubmit={handleRatingSubmit}
-                    onSkip={handleRatingSkip}
                 />
             </div>
         );

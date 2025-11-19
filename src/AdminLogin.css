@@ -1,0 +1,111 @@
+.admin-login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ede7ff, #f9f7ff);
+  padding: 24px;
+}
+
+.admin-login-card {
+  width: min(360px, 100%);
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(76, 64, 201, 0.18);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-login-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  color: #1f1b3a;
+}
+
+.admin-login-sub {
+  margin: 0;
+  font-size: 14px;
+  color: #5a5784;
+}
+
+.admin-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-login-form label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #423d74;
+}
+
+.admin-login-form input {
+  height: 42px;
+  border: 1px solid #d7d3ff;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #1f1b3a;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.admin-login-form input:focus {
+  border-color: #6c63ff;
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+}
+
+.admin-login-button {
+  margin-top: 8px;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #6c63ff, #4f44f8);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-login-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.admin-login-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 20px rgba(82, 71, 220, 0.25);
+}
+
+.admin-login-error {
+  background: rgba(239, 68, 68, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #a02222;
+}
+
+.admin-sidebar__account {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.admin-account-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+@media (max-width: 480px) {
+  .admin-login-card {
+    padding: 24px;
+    gap: 12px;
+  }
+}

@@ -98,10 +98,22 @@ export const fetchSessionRating = (sessionId, email) =>
 export const submitSessionRating = (sessionId, email, payload) =>
   backendApi.post(`/students/sessions/${sessionId}/rating`, payload, { params: { student_email: email } });
 
-// You can also add interceptors here for handling tokens or errors globally
-adminApi.interceptors.request.use(config => {
-  // Using the default admin token from your backend configuration
-  config.headers.Authorization = 'Bearer admin_secret_123';
+// Admin authentication helpers
+let adminAuthToken = null;
+
+export const setAdminAuthToken = (token) => {
+  adminAuthToken = token || null;
+};
+
+export const adminLogin = (payload) => adminApi.post('/admin/auth/login', payload);
+export const adminLogout = () => adminApi.post('/admin/auth/logout');
+export const fetchAdminProfile = () => adminApi.get('/admin/auth/me');
+
+// Apply auth token to outbound admin requests when available
+adminApi.interceptors.request.use((config) => {
+  if (adminAuthToken) {
+    config.headers.Authorization = `Bearer ${adminAuthToken}`;
+  }
   return config;
 });
 

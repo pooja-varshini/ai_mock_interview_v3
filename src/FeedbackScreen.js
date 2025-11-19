@@ -74,6 +74,18 @@ const getCompetencyIcon = (name, index = 0) => {
     return COMPETENCY_ICON_POOL[index % COMPETENCY_ICON_POOL.length] || FiCpu;
 };
 
+const formatScoreDisplay = (score, decimals = 1) => {
+    if (score === null || score === undefined || Number.isNaN(Number(score))) {
+        return '—';
+    }
+    const value = Number(score);
+    const rounded = Number(value.toFixed(decimals));
+    if (Number.isInteger(rounded)) {
+        return String(rounded);
+    }
+    return rounded.toFixed(decimals);
+};
+
 const SummaryCard = ({ icon: Icon, title, subtitle, data }) => {
     const score = data?.score ?? null;
     const tone = classifyScore(score);
@@ -119,7 +131,7 @@ const SummaryCard = ({ icon: Icon, title, subtitle, data }) => {
                 <div>
                     <p className="summary-title">{title}</p>
                     {subtitle ? <p className="summary-subtitle">{subtitle}</p> : null}
-                    <span className="score-badge small">{score != null ? score.toFixed(1) : '—'}</span>
+                    <span className="score-badge small">{formatScoreDisplay(score)}</span>
                 </div>
             </div>
             <div className="summary-content summary-content--accordion">
@@ -311,7 +323,7 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                 const questionNumber = item.number ?? idx + 1;
                                 const rawScore = item.score != null ? Math.min(Math.max(Number(item.score), 0), 5) : null;
                                 const scoreTone = rawScore == null ? 'neutral' : rawScore >= 3.5 ? 'great' : rawScore >= 2 ? 'average' : 'low';
-                                const scoreLabel = rawScore != null ? `Score: ${rawScore.toFixed(1)}/5` : 'Score: —';
+                                const scoreLabel = rawScore != null ? `Score: ${formatScoreDisplay(rawScore)}/5` : 'Score: —';
                                 const answerText = item.original_answer || item.answer;
                                 return (
                                     <div
@@ -366,7 +378,7 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                                 {item.improvements?.length ? (
                                                     <div className="detail-block">
                                                         <h4>What to improve</h4>
-                                                        <ul>{item.improvements.map((point, mIdx) => <li key={`imp-${idx}-${mIdx}`}>{point}</li>)}</ul>
+                                                        <p>{item.improvements.join(' ')}</p>
                                                     </div>
                                                 ) : null}
                                                 {item.better_example ? (
@@ -401,7 +413,7 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                             style={circleStyle}
                                             aria-hidden="true"
                                         >
-                                            <span className="skill-circle-value">{rawScore != null ? rawScore.toFixed(1) : '—'}</span>
+                                            <span className="skill-circle-value">{formatScoreDisplay(rawScore)}</span>
                                             <span className="skill-circle-label">/5</span>
                                         </div>
                                         <div className="mandatory-skill-content">

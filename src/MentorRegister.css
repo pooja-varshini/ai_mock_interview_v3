@@ -257,27 +257,88 @@
   border-radius: 16px;
   background: rgba(30, 18, 58, 0.85);
   border: 1px solid rgba(122, 74, 218, 0.35);
+  display: grid;
+  gap: 18px;
+  text-align: left;
+}
+
+.mentor-register-success {
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(72, 199, 116, 0.18);
+  border: 1px solid rgba(72, 199, 116, 0.45);
+  color: #9cf4b7;
+  
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .mentor-register-summary h2 {
   margin-top: 0;
   margin-bottom: 16px;
   color: #d8b7ff;
+  text-align: left;
 }
 
 .mentor-register-summary ul {
   list-style: none;
   padding: 0;
   margin: 0 0 16px;
+  display: grid;
+  gap: 10px;
 }
 
 .mentor-register-summary li {
-  margin-bottom: 8px;
+  margin: 0;
 }
 
 .mentor-register-summary strong {
   font-weight: 600;
   color: #f5f5ff;
+}
+
+.mentor-register-duplicates {
+  padding: 18px;
+  border-radius: 14px;
+  background: rgba(80, 160, 255, 0.12);
+  border: 1px solid rgba(80, 160, 255, 0.35);
+}
+
+.mentor-register-duplicates h3 {
+  margin: 0 0 10px;
+  color: #9fc8ff;
+}
+
+.mentor-register-duplicates p {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  color: rgba(214, 229, 255, 0.82);
+}
+
+.mentor-register-duplicates ul {
+  margin: 0;
+  padding-left: 20px;
+  display: block;
+  color: rgba(220, 232, 255, 0.92);
+  font-size: 0.95rem;
+  list-style-position: outside;
+}
+
+.mentor-register-duplicates li {
+  list-style: disc;
+  margin: 0 0 6px;
+}
+
+.duplicate-email {
+  font-weight: 600;
+  color: #cfe4ff;
+}
+
+.duplicate-meta {
+  color: rgba(214, 229, 255, 0.7);
 }
 
 .mentor-register-errors {

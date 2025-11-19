@@ -237,12 +237,32 @@ const MentorRegister = () => {
 
         {result && (
           <div className="mentor-register-summary">
+            <div className="mentor-register-success" role="status">
+              ✅ Upload successful! All valid students have been enrolled.
+            </div>
+
             <h2>Import summary</h2>
             <ul>
-              <li><strong>Total rows:</strong> {result.total_rows}</li>
+              <li><strong>Total rows processed:</strong> {result.total_rows}</li>
               <li><strong>Students imported:</strong> {result.imported}</li>
               <li><strong>Emails sent:</strong> {result.email_sent}</li>
+              <li><strong>Duplicates ignored:</strong> {Array.isArray(result.duplicates_ignored) ? result.duplicates_ignored.length : 0}</li>
             </ul>
+
+            {Array.isArray(result.duplicates_ignored) && result.duplicates_ignored.length > 0 && (
+              <div className="mentor-register-duplicates">
+                <h3>Ignored duplicates</h3>
+                <p>The following emails were already registered and were skipped:</p>
+                <ul>
+                  {result.duplicates_ignored.map((duplicate) => (
+                    <li key={`${duplicate.email}-${duplicate.row}`}>
+                      <span className="duplicate-email">{duplicate.email}</span>
+                      {typeof duplicate.row === 'number' ? <span className="duplicate-meta"> (row {duplicate.row})</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {Array.isArray(result.errors) && result.errors.length > 0 && (
               <div className="mentor-register-errors">
