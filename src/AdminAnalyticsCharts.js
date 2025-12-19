@@ -154,6 +154,28 @@ const ProgramNameTick = ({ x, y, payload }) => {
     </g>
   );
 };
+const RoleNameTick = ({ x, y, payload }) => {
+  const lines = wrapLabel(payload.value, 26);
+  const lineHeight = 12;
+  const totalHeight = lines.length * lineHeight;
+  
+  return (
+    <g transform={`translate(${x - 10},${y - totalHeight / 2})`}>
+      {lines.map((line, index) => (
+        <text
+          key={`${payload.value}-${index}`}
+          x={0}
+          dy={(index + 1) * lineHeight}
+          textAnchor="end"
+          fill="#A7A3C2"
+          fontSize={11}
+        >
+          {line}
+        </text>
+      ))}
+    </g>
+  );
+};
 
 export const ProgramComposedChart = ({ data }) => (
   <ResponsiveContainer width="100%" height={280}>
@@ -301,7 +323,7 @@ const CustomTreemapContent = ({ depth, name, size, x, y, width, height, index })
 };
 
 export const TrendingRolesBar = ({ data }) => (
-  <ResponsiveContainer width="100%" height={280}>
+  <ResponsiveContainer width="100%" height={320}>
     <BarChart
       data={data}
       layout="vertical"
@@ -309,7 +331,16 @@ export const TrendingRolesBar = ({ data }) => (
     >
       <CartesianGrid strokeDasharray="3 6" stroke="rgba(148, 121, 200, 0.2)" />
       <XAxis type="number" tick={{ fill: '#A7A3C2', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
-      <YAxis type="category" dataKey="job_role" tick={{ fill: '#A7A3C2', fontSize: 12 }} axisLine={false} tickLine={false} width={140} />
+      <YAxis
+        type="category"
+        dataKey="job_role"
+        tick={<RoleNameTick />}
+        axisLine={false}
+        tickLine={false}
+        width={220}
+        tickMargin={8}         // correct spacing from bar
+        interval={0}  
+      />
       <Tooltip
         contentStyle={defaultTooltipStyle}
         labelStyle={defaultTooltipLabelStyle}

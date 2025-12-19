@@ -206,8 +206,6 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
   const [workExperienceOptions, setWorkExperienceOptions] = useState([]);
   const [programInfo, setProgramInfo] = useState(student?.program || null);
 
-  const [activeTab, setActiveTab] = useState('interview'); // 'interview' or 'leaderboard'
-  const [leaderboard, setLeaderboard] = useState([]);
   const [selectedSession, setSelectedSession] = useState(null);
   const [isStarting, setIsStarting] = useState(false);
   const [reattemptPrompt, setReattemptPrompt] = useState({
@@ -438,9 +436,6 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
           setSessions([]);
           setAttemptIndexBySession({});
         }
-        const leaderboardRes = await adminApi.get('/admin/analytics/leaderboard');
-        setLeaderboard(leaderboardRes.data || []);
-
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       }
@@ -801,227 +796,198 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
       <header className="dashboard-header">
         <button onClick={onLogout} className="logout-button-top">Logout</button>
         <div className="header-left">
-            <h1>AI Mock Interview</h1>
-            <p>Welcome, {student ? student.name : 'Guest'}</p>
+          <h1>AI Mock Interview</h1>
+          <p>Welcome, {student ? student.name : 'Guest'}</p>
         </div>
-        <nav className="dashboard-nav">
-          <button onClick={() => setActiveTab('interview')} className={`nav-button ${activeTab === 'interview' ? 'active' : ''}`}>Interview</button>
-          {/* <button onClick={() => setActiveTab('leaderboard')} className={`nav-button ${activeTab === 'leaderboard' ? 'active' : ''}`}>Leaderboard</button> */}
-        </nav>
       </header>
 
       <main className="dashboard-main">
-        {activeTab === 'interview' ? (
-          <>
-            <TrendingCompanies 
-              companies={trendingCompanies}
-              allRoles={allRoles}
-              interviewTypes={allInterviewTypes}
-              workExperienceOptions={workExperienceOptions}
-              programName={programInfo?.program_name || ''}
-              onSelectRole={handleTrendingRoleSelect}
-              onQuickStart={quickStartFromTrending}
-              onInteract={handleTrendingInteraction}
-              manualResetTick={manualFormChangeTick}
-              externalSelections={trendingContext}
-            />
-            <section className="start-interview-section card">
-              <h2>Start Interview Session</h2>
-              <p className="session-program-name">
-                Program: <strong>{programInfo?.program_name || 'Not assigned'}</strong>
-              </p>
-              <div className="session-inputs">
-                <select
-                 value={industryType}
-                 onChange={(e) => {
-                   isManuallyChangingRef.current = true;
-                   resetTrendingSelections();
-                   setIndustryType(e.target.value);
-                 }}
-                >
-                  <option value="">Select Industry</option>
-                  {allIndustries.map((industry) => (
-                    <option key={industry} value={industry}>
-                      {industry}
-                    </option>
-                  ))}
-                </select>
+        <TrendingCompanies
+          companies={trendingCompanies}
+          allRoles={allRoles}
+          interviewTypes={allInterviewTypes}
+          workExperienceOptions={workExperienceOptions}
+          programName={programInfo?.program_name || ''}
+          onSelectRole={handleTrendingRoleSelect}
+          onQuickStart={quickStartFromTrending}
+          onInteract={handleTrendingInteraction}
+          manualResetTick={manualFormChangeTick}
+          externalSelections={trendingContext}
+        />
+        <section className="start-interview-section card">
+          <h2>Start Interview Session</h2>
+          <p className="session-program-name">
+            Program: <strong>{programInfo?.program_name || 'Not assigned'}</strong>
+          </p>
+          <div className="session-inputs">
+            <select
+              value={industryType}
+              onChange={(e) => {
+                isManuallyChangingRef.current = true;
+                resetTrendingSelections();
+                setIndustryType(e.target.value);
+              }}
+            >
+              <option value="">Select Industry</option>
+              {allIndustries.map((industry) => (
+                <option key={industry} value={industry}>
+                  {industry}
+                </option>
+              ))}
+            </select>
 
-                <select
-                  value={companyName}
-                  onChange={(e) => {
-                    isManuallyChangingRef.current = true;
-                    resetTrendingSelections();
-                    setCompanyName(e.target.value);
-                  }}
-                  disabled={!industryType}
-                >
-                  <option value="">Select Company</option>
-                  {allCompanies.map((company) => (
-                    <option key={company} value={company}>
-                      {company}
-                    </option>
-                  ))}
-                </select>
+            <select
+              value={companyName}
+              onChange={(e) => {
+                isManuallyChangingRef.current = true;
+                resetTrendingSelections();
+                setCompanyName(e.target.value);
+              }}
+              disabled={!industryType}
+            >
+              <option value="">Select Company</option>
+              {allCompanies.map((company) => (
+                <option key={company} value={company}>
+                  {company}
+                </option>
+              ))}
+            </select>
 
-                <select
-                  value={interviewType}
-                  onChange={(e) => {
-                    isManuallyChangingRef.current = true;
-                    resetTrendingSelections();
-                    setInterviewType(e.target.value);
-                  }} 
-                  disabled={!industryType || !companyName}
-                >
-                  <option value="">Select Interview Type</option>
-                  {allInterviewTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
+            <select
+              value={interviewType}
+              onChange={(e) => {
+                isManuallyChangingRef.current = true;
+                resetTrendingSelections();
+                setInterviewType(e.target.value);
+              }}
+              disabled={!industryType || !companyName}
+            >
+              <option value="">Select Interview Type</option>
+              {allInterviewTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
 
-                <select
-                  value={workExperience}
-                  onChange={(e) => { 
-                    isManuallyChangingRef.current = true;
-                    resetTrendingSelections();
-                    setWorkExperience(e.target.value);
-                  }} 
-                  disabled={!industryType || !companyName || !interviewType}
-                >
-                  <option value="">Select Work Experience</option>
-                  {workExperienceOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+            <select
+              value={workExperience}
+              onChange={(e) => {
+                isManuallyChangingRef.current = true;
+                resetTrendingSelections();
+                setWorkExperience(e.target.value);
+              }}
+              disabled={!industryType || !companyName || !interviewType}
+            >
+              <option value="">Select Work Experience</option>
+              {workExperienceOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
 
-                <select
-                  value={jobRole}
-                  onChange={(e) => {
-                    isManuallyChangingRef.current = true;
-                    resetTrendingSelections();
-                    setJobRole(e.target.value);
-                  }}
-                  disabled={!industryType || !companyName || !interviewType || !workExperience}
-                >
-                  <option value="">Select Job Role</option>
-                  {allRoles.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
+            <select
+              value={jobRole}
+              onChange={(e) => {
+                isManuallyChangingRef.current = true;
+                resetTrendingSelections();
+                setJobRole(e.target.value);
+              }}
+              disabled={!industryType || !companyName || !interviewType || !workExperience}
+            >
+              <option value="">Select Job Role</option>
+              {allRoles.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
 
-                <button
-                  onClick={() => startInterview()}
-                  className="start-button"
-                  disabled={
-                    isStarting ||
-                    !industryType ||
-                    !companyName ||
-                    !interviewType ||
-                    !workExperience ||
-                    !jobRole
-                  }
-                >
-                  {isStarting ? 'Starting…' : 'Start Interview'}
-                </button>
-              </div>
-            </section>
-            <section className="records-section card">
-              <h2>Mock Interview Records</h2>
-              <p>Review and track all your mock interview attempts.</p>
-              <div className="table-container" role="region" aria-label="Mock interview records">
-                <div className="table-header">
-                  <div>Interview Role</div>
-                  <div>Company</div>
-                  <div>Interview Type</div>
-                  <div>Work Experience</div>
-                  <div>Date & Time</div>
-                  <div>Score</div>
-                  <div>Status</div>
-                  <div>Actions</div>
-                </div>
-                <div className="table-body" role="list">
-                  {sessions.length > 0 ? (
-                    sessions.map((session) => (
-                      <div
-                        className={`table-row${highlightSessionId === session.session_id ? ' highlighted' : ''}${(attemptIndexBySession[session.session_id] || 1) > 1 ? ' reattempt' : ''}`}
-                        key={session.session_id}
-                        role="listitem"
-                      >
-                        <div className="role-cell">
-                          <span className="role-title">{session.job_role}</span>
-                          {(() => {
-                            const attemptNumber = attemptIndexBySession[session.session_id] || 1;
-                            const repeat = attemptNumber > 1;
-                            return (
-                              <span
-                                className={`attempt-chip ${repeat ? 'repeat' : 'first'}`}
-                                title={repeat ? `Previously attempted ${attemptNumber - 1} time(s)` : 'First time attempting this combination'}
-                              >
-                                {ordinal(attemptNumber)} attempt
-                              </span>
-                            );
-                          })()}
-                        </div>
-                        <div>{session.company_name || 'N/A'}</div>
-                        <div>{session.interview_type || 'N/A'}</div>
-                        <div>{session.work_experience || 'N/A'}</div>
-                        <div>{formatISTDateTime(session.started_at)}</div>
-                        <div className={getScoreClass(session.overall_score)}>
-                          {formatScoreDisplay(session.overall_score)}
-                        </div>
-                        <div className={getStatusClass(session.status)}>
-                          {formatStatus(session.status)}
-                        </div>
-                        <div className="table-actions">
-                          <button
-                            onClick={() => handleViewReport(session.session_id)}
-                            className="view-report-button"
-                            disabled={session.status?.toLowerCase() !== 'completed'}
-                          >
-                            View Report
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="table-row-empty">No interview records found.</div>
-                  )}
-                </div>
-              </div>
-            </section>
-          </>
-        ) : (
-          <section className="leaderboard-section card">
-            <h2>Leaderboard</h2>
-            <p>See how you rank against other students.</p>
-            <div className="table-container">
-                <div className="table-header">
-                    <div>Rank</div>
-                    <div>Name</div>
-                    <div>Average Score</div>
-                    <div>Interviews Taken</div>
-                </div>
-                {leaderboard.map((entry) => (
-                    <div className={`table-row ${entry.student_name === (student && student.name) ? 'current-user-row' : ''}`} key={entry.rank}>
-                        <div>{entry.rank}</div>
-                        <div>{entry.student_name}</div>
-                        <div className={getScoreClass(entry.avg_score)}>{formatScoreDisplay(entry.avg_score)}</div>
-                        <div>{entry.total_sessions}</div>
-                    </div>
-                ))}
+            <button
+              onClick={() => startInterview()}
+              className="start-button"
+              disabled={
+                isStarting ||
+                !industryType ||
+                !companyName ||
+                !interviewType ||
+                !workExperience ||
+                !jobRole
+              }
+            >
+              {isStarting ? 'Starting…' : 'Start Interview'}
+            </button>
+          </div>
+        </section>
+
+        <section className="records-section card">
+          <h2>Mock Interview Records</h2>
+          <p>Review and track all your mock interview attempts.</p>
+          <div className="table-container" role="region" aria-label="Mock interview records">
+            <div className="table-header">
+              <div>Interview Role</div>
+              <div>Company</div>
+              <div>Interview Type</div>
+              <div>Work Experience</div>
+              <div>Date & Time</div>
+              <div>Score</div>
+              <div>Status</div>
+              <div>Actions</div>
             </div>
-          </section>
-        )}
+            <div className="table-body" role="list">
+              {sessions.length > 0 ? (
+                sessions.map((session) => (
+                  <div
+                    className={`table-row${highlightSessionId === session.session_id ? ' highlighted' : ''}${(attemptIndexBySession[session.session_id] || 1) > 1 ? ' reattempt' : ''}`}
+                    key={session.session_id}
+                    role="listitem"
+                  >
+                    <div className="role-cell">
+                      <span className="role-title">{session.job_role}</span>
+                      {(() => {
+                        const attemptNumber = attemptIndexBySession[session.session_id] || 1;
+                        const repeat = attemptNumber > 1;
+                        return (
+                          <span
+                            className={`attempt-chip ${repeat ? 'repeat' : 'first'}`}
+                            title={repeat ? `Previously attempted ${attemptNumber - 1} time(s)` : 'First time attempting this combination'}
+                          >
+                            {ordinal(attemptNumber)} attempt
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <div>{session.company_name || 'N/A'}</div>
+                    <div>{session.interview_type || 'N/A'}</div>
+                    <div>{session.work_experience || 'N/A'}</div>
+                    <div>{formatISTDateTime(session.completed_at || session.started_at)}</div>
+                    <div className={getScoreClass(session.overall_score)}>
+                      {formatScoreDisplay(session.overall_score)}
+                    </div>
+                    <div className={getStatusClass(session.status)}>
+                      {formatStatus(session.status)}
+                    </div>
+                    <div className="table-actions">
+                      <button
+                        onClick={() => handleViewReport(session.session_id)}
+                        className="view-report-button"
+                        disabled={session.status?.toLowerCase() !== 'completed'}
+                      >
+                        View Report
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="table-row-empty">No interview records found.</div>
+              )}
+            </div>
+          </div>
+        </section>
       </main>
-      {selectedSession ? (
-        <FeedbackModal sessionId={selectedSession} onClose={closeReport} />
-      ) : null}
+
+      <FeedbackModal sessionId={selectedSession} onClose={closeReport} />
       <ReattemptPrompt
         isOpen={reattemptPrompt.open}
         sessions={reattemptPrompt.sessions}

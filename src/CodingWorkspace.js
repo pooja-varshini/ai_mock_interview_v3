@@ -118,6 +118,35 @@ const PLACEHOLDER_PATTERNS = [
   /^\/\*\s*write your answer here\s*\*\/$/i,
 ];
 
+const IMAGE_STDOUT_PREFIX = '__IMAGE_PNG__:';
+
+const parseVisualizationsFromStdout = (stdout) => {
+  if (!stdout) {
+    return { text: stdout || '', visualizations: [] };
+  }
+
+  const lines = String(stdout).split(/\r?\n/);
+  const remainingLines = [];
+  const visualizations = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith(IMAGE_STDOUT_PREFIX)) {
+      const base64 = trimmed.slice(IMAGE_STDOUT_PREFIX.length).trim();
+      if (base64) {
+        visualizations.push({ type: 'image/png', data: base64 });
+      }
+    } else {
+      remainingLines.push(line);
+    }
+  }
+
+  return {
+    text: remainingLines.join('\n'),
+    visualizations,
+  };
+};
+
 const matchesLanguage = (runtime, targetLanguage) => {
   if (!runtime || !targetLanguage) return false;
   const normalized = targetLanguage.toLowerCase();
@@ -219,6 +248,7 @@ export default function CodingWorkspace({
   const [loadingRuntimes, setLoadingRuntimes] = useState(true);
   const [userLanguageOverride, setUserLanguageOverride] = useState(false);
   const [languageCodeMap, setLanguageCodeMap] = useState({});
+  const [visualizations, setVisualizations] = useState([]);
   const [manualInputEnabled, setManualInputEnabled] = useState(false);
   const consoleRef = useRef(null);
   const manualInputRef = useRef(null);
@@ -294,6 +324,7 @@ export default function CodingWorkspace({
     setStderrText('');
     setInternalError(null);
     setLastRunSucceeded(null);
+    setVisualizations([]);
   };
 
   const compilerMessage = useMemo(() => {
@@ -302,7 +333,7 @@ export default function CodingWorkspace({
     }
     return lastRunSucceeded
       ? 'Compilation successful'
-      : stderrText || internalError || 'Unknown compilation error';
+      : stderrText || internalError || 'Time limit exceeded. Please retry or optimize your code';
   }, [hasRun, lastRunSucceeded, stderrText, internalError]);
 
   useEffect(() => {
@@ -522,14 +553,17 @@ export default function CodingWorkspace({
       const stderrCombined = stderrSegments.join('\n').trim();
       const success = (compileResult.code == null || compileResult.code === 0) && runResult.code === 0;
 
-      setStdoutText(stdoutValue);
+      const parsed = parseVisualizationsFromStdout(stdoutValue);
+
+      setStdoutText(parsed.text);
       setStderrText(stderrCombined);
       setInternalError(null);
       setLastRunSucceeded(success);
       setHasRun(true);
+      setVisualizations(parsed.visualizations);
 
       return {
-        stdout: stdoutValue,
+        stdout: parsed.text,
         stderr: stderrCombined,
         success,
         internalError: null,
@@ -542,6 +576,7 @@ export default function CodingWorkspace({
       // Set lastRunSucceeded after error is set
       setLastRunSucceeded(false);
       setHasRun(true);
+      setVisualizations([]);
 
       return {
         stdout: '',
@@ -688,6 +723,10 @@ export default function CodingWorkspace({
     }));
   }, [runtimes, normalizedSupportedLanguages, effectiveCoreLanguages, enforceSqlOnly]);
 
+  const hasStdout = stdoutText && stdoutText.trim().length > 0;
+  const hasVisualizations = visualizations.length > 0;
+  const shouldShowOutputText = hasStdout || !hasVisualizations;
+
   return (
     <div className={workspaceClassName}>
       <div className="neo-toolbar">
@@ -801,7 +840,29 @@ export default function CodingWorkspace({
             {lastRunSucceeded ? (
               <div className="neo-runner__output">
                 <label>Output</label>
-                <pre aria-live="polite">{stdoutText || '— No output —'}</pre>
+                <div className="neo-runner__output-box">
+                  {shouldShowOutputText && (
+                    <pre aria-live="polite">
+                      {hasStdout ? stdoutText : 'No output'}
+                    </pre>
+                  )}
+                  {hasVisualizations && (
+                    <div className="neo-runner__visualizations">
+                      <div className="neo-runner__visualizations-grid">
+                        {visualizations.map((viz, index) => (
+                          <div key={index} className="neo-runner__visualization">
+                            {viz.type === 'image/png' && (
+                              <img
+                                src={`data:image/png;base64,${viz.data}`}
+                                alt={`Visualization ${index + 1}`}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : null}
           </div>

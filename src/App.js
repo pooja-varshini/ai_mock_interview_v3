@@ -6,6 +6,7 @@ import MentorRegister from './MentorRegister';
 import Dashboard from './Dashboard';
 import InstructionScreen from './InstructionScreen';
 import AdminPage from './AdminPage';
+import AdminStudentAnalyticsPage from './AdminStudentAnalyticsPage';
 import AdminLogin from './AdminLogin';
 import { ToastContainer, toast } from 'react-toastify';
 import { FiZap } from 'react-icons/fi';
@@ -213,6 +214,16 @@ function App() {
                     element={
                         adminSession ? (
                             <AdminPage admin={adminSession} onLogout={handleAdminLogout} />
+                        ) : adminLoading ? null : (
+                            <Navigate to="/admin/login" replace />
+                        )
+                    }
+                />
+                <Route
+                    path="/admin/student/:studentId"
+                    element={
+                        adminSession ? (
+                            <AdminStudentAnalyticsPage admin={adminSession} onLogout={handleAdminLogout} />
                         ) : adminLoading ? null : (
                             <Navigate to="/admin/login" replace />
                         )

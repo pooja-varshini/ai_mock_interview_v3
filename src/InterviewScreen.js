@@ -1,11 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { FiBriefcase, FiHome, FiZap, FiAward } from 'react-icons/fi';
-import { interviewApi, fetchSessionRating, submitSessionRating } from './api';
+import { interviewApi, fetchSessionRating, submitSessionRating, getFeedbackStatus, triggerFeedbackGeneration } from './api';
 import SessionCompleted from './SessionCompleted';
 import FeedbackScreen from './FeedbackScreen';
 import './InterviewScreen.css';
 import CodingWorkspace from './CodingWorkspace';
 import SessionRatingModal from './SessionRatingModal';
+import VideoRecorder from './VideoRecorder';
+import SystemDesignCanvas from './SystemDesignCanvas';
+import './SystemDesignCanvas.css';
 
 const normalizeQuestion = (rawQuestion) => {
     if (!rawQuestion) {
@@ -73,7 +76,10 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     // Essential state only
     const [question, setQuestion] = useState(() => normalizeQuestion(firstQuestion));
     const [questionNumber, setQuestionNumber] = useState(initialQuestionNumber || 1);
-    const [isAnswering, setIsAnswering] = useState(false);
+    const [isAnswering, setIsAnswering] = useState(() => {
+        const normalizedFirst = normalizeQuestion(firstQuestion);
+        return normalizedFirst?.type === 'coding';
+    });
     const [isLoading, setIsLoading] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [isComplete, setIsComplete] = useState(false);
@@ -81,12 +87,97 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const [answer, setAnswer] = useState('');
     const [finalFeedback, setFinalFeedback] = useState(null);
     const [showFeedback, setShowFeedback] = useState(false);
+    const [canViewFeedback, setCanViewFeedback] = useState(false);
     const [answerError, setAnswerError] = useState('');
     const [, setCodingSubmission] = useState(null);
     const [maxQuestions, setMaxQuestions] = useState(initialMaxQuestions);
     const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
     const [existingRating, setExistingRating] = useState({ rating: 0, comments: '' });
     const [ratingLoaded, setRatingLoaded] = useState(false);
+    const [feedbackStatus, setFeedbackStatus] = useState('not_requested');
+    const [feedbackError, setFeedbackError] = useState(null);
+    const pollingRef = useRef(null);
+    const toastTimerRef = useRef(null);
+    const videoRecorderRef = useRef(null);
+    const [videoStatus, setVideoStatus] = useState('idle');
+    const [videoReady, setVideoReady] = useState(false);
+    const [videoError, setVideoError] = useState(null);
+    const [isVideoUploading, setIsVideoUploading] = useState(false);
+    const [floatingPanelPosition, setFloatingPanelPosition] = useState(null);
+    const floatingPanelDragRef = useRef(null);
+    const floatingPanelRef = useRef(null);
+    const [isSystemDesignModalOpen, setIsSystemDesignModalOpen] = useState(false);
+    const [systemDesignDiagram, setSystemDesignDiagram] = useState('');
+    const [systemDesignError, setSystemDesignError] = useState('');
+    const [timeRemaining, setTimeRemaining] = useState(null);
+    const timerRef = useRef(null);
+    const autoSubmitTriggeredRef = useRef(false);
+
+    const clearFeedbackPolling = useCallback(() => {
+        if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+        }
+    }, []);
+
+    const clearToastTimer = useCallback(() => {
+        if (toastTimerRef.current) {
+            clearTimeout(toastTimerRef.current);
+            toastTimerRef.current = null;
+        }
+    }, []);
+
+    const fetchStatus = useCallback(async () => {
+        try {
+            const { data } = await getFeedbackStatus(sessionId);
+            const { status, error } = data;
+            const normalizedStatus = status || 'pending';
+            const normalizedError = error || null;
+
+            setFeedbackStatus(normalizedStatus);
+            setFeedbackError(normalizedError);
+
+            if (normalizedStatus === 'completed') {
+                clearFeedbackPolling();
+                setIsAnalyzingFinal(false);
+                setIsComplete(true);
+                setCanViewFeedback(true);
+            } else if (normalizedStatus === 'failed') {
+                clearFeedbackPolling();
+                setIsAnalyzingFinal(false);
+                setIsComplete(true);
+                setCanViewFeedback(true);
+                if (!normalizedError) {
+                    setFeedbackError('We hit a snag while preparing your report. Please try regenerating.');
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch feedback status', err);
+            clearFeedbackPolling();
+            setFeedbackStatus('failed');
+            setFeedbackError('We could not verify the feedback status. Please regenerate the report.');
+            setIsAnalyzingFinal(false);
+            setIsComplete(true);
+            setCanViewFeedback(true);
+        }
+    }, [sessionId, clearFeedbackPolling]);
+
+    const beginFeedbackPolling = useCallback(() => {
+        setFeedbackStatus('pending');
+        setFeedbackError(null);
+        setIsAnalyzingFinal(true);
+        setIsComplete(true);
+        setCanViewFeedback(false);
+        setShowFeedback(false);
+        fetchStatus();
+        clearFeedbackPolling();
+        pollingRef.current = setInterval(fetchStatus, 7000);
+    }, [fetchStatus, clearFeedbackPolling]);
+
+    useEffect(() => () => {
+        clearFeedbackPolling();
+        clearToastTimer();
+    }, [clearFeedbackPolling, clearToastTimer]);
 
     // Refs for speech recognition and text area focus management
     const recognitionRef = useRef(null);
@@ -94,9 +185,30 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const answerRef = useRef('');
 
     const isCodingQuestion = question?.type === 'coding';
+    const isSystemDesignQuestion = (() => {
+        const type = (question?.type || question?.raw?.question_type || '').toString().toLowerCase();
+        return type.includes('system design');
+    })();
+
+    const hasValidDiagram = useMemo(() => {
+        if (!systemDesignDiagram) return false;
+        try {
+            const parsed = JSON.parse(systemDesignDiagram);
+            return Array.isArray(parsed.nodes) && parsed.nodes.length > 0;
+        } catch {
+            return false;
+        }
+    }, [systemDesignDiagram]);
     const rawQuestionType = question?.raw?.question_type ?? question?.type ?? '';
     const normalizedQuestionType = typeof rawQuestionType === 'string' ? rawQuestionType.trim().toLowerCase() : '';
     const isSqlQuestion = isCodingQuestion && normalizedQuestionType.includes('sql');
+    
+    // Timer duration based on question type: Speech Based = 2 min, Coding/System Design = 15 min
+    const questionTimeLimitSeconds = useMemo(() => {
+        if (normalizedQuestionType.includes('speech')) return 2 * 60; // 2 minutes
+        if (isCodingQuestion || isSystemDesignQuestion) return 15 * 60; // 15 minutes
+        return 2 * 60; // Default to 2 minutes for unknown types
+    }, [normalizedQuestionType, isCodingQuestion, isSystemDesignQuestion]);
 
     const codingSupportedLanguages = useMemo(() => {
         if (!isCodingQuestion) {
@@ -163,7 +275,39 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             setIsAnalyzingFinal(false);
             setAnswerError('');
         }
-    }, [isCodingQuestion, questionNumber]);
+        setSystemDesignDiagram('');
+        setSystemDesignError('');
+        setIsSystemDesignModalOpen(false);
+        // Reset timer for new question
+        setTimeRemaining(questionTimeLimitSeconds);
+        autoSubmitTriggeredRef.current = false;
+    }, [isCodingQuestion, questionNumber, questionTimeLimitSeconds]);
+
+    // Ref to hold submit function for auto-submit
+    const handleSubmitAnswerRef = useRef(null);
+    
+    // Timer effect - starts when questionNumber changes
+    useEffect(() => {
+        // Don't run timer if complete
+        if (isComplete) return;
+        
+        const intervalId = setInterval(() => {
+            setTimeRemaining(prev => {
+                if (prev === null || prev <= 0) return prev;
+                const newTime = prev - 1;
+                
+                // Auto-submit when timer hits zero
+                if (newTime <= 0 && !autoSubmitTriggeredRef.current && handleSubmitAnswerRef.current) {
+                    autoSubmitTriggeredRef.current = true;
+                    setTimeout(() => handleSubmitAnswerRef.current(true), 100);
+                }
+                
+                return newTime;
+            });
+        }, 1000);
+        
+        return () => clearInterval(intervalId);
+    }, [questionNumber, isComplete]);
 
     useEffect(() => {
         if (isAnswering && !isCodingQuestion && answerInputRef.current) {
@@ -174,6 +318,14 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     useEffect(() => {
         answerRef.current = answer;
     }, [answer]);
+
+    // Format time remaining as MM:SS
+    const formatTime = (seconds) => {
+        if (seconds === null) return '--:--';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
 
     const handleStartAnswering = () => {
         if (isCodingQuestion) {
@@ -203,20 +355,29 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             }
         };
 
-        if (isComplete) {
+        if (isComplete && feedbackStatus === 'completed') {
             loadExistingRating();
+        } else if (!isComplete || feedbackStatus !== 'completed') {
+            setRatingLoaded(false);
+            setIsRatingModalOpen(false);
         }
-    }, [isComplete, sessionId, interviewData?.studentEmail]);
+    }, [isComplete, feedbackStatus, sessionId, interviewData?.studentEmail]);
 
     useEffect(() => {
-        if (isComplete) {
+        if (feedbackStatus === 'completed') {
             if (existingRating.rating > 0) {
                 setIsRatingModalOpen(false);
+                setCanViewFeedback(true);
             } else {
                 setIsRatingModalOpen(true);
+                setCanViewFeedback(false);
             }
+        } else if (feedbackStatus === 'failed') {
+            setCanViewFeedback(true);
+        } else {
+            setCanViewFeedback(false);
         }
-    }, [isComplete, ratingLoaded, existingRating.rating]);
+    }, [feedbackStatus, existingRating.rating]);
 
     const handleMicClick = () => {
         if (isRecording) {
@@ -241,6 +402,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             addToast('Thank you for rating your interview!', 'success');
             setExistingRating({ rating, comments: comments || '' });
             setIsRatingModalOpen(false);
+            setCanViewFeedback(true);
         } catch (error) {
             console.error('Failed to submit session rating:', error);
             const message = error?.response?.data?.detail || 'Unable to submit rating. Please try again later.';
@@ -248,6 +410,40 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             throw new Error(message);
         }
     };
+
+    const handleViewFeedback = useCallback(() => {
+        if (!canViewFeedback) {
+            if (feedbackStatus === 'completed') {
+                setIsRatingModalOpen(true);
+            }
+            return;
+        }
+        setShowFeedback(true);
+    }, [canViewFeedback, feedbackStatus]);
+
+    const handleRegenerateFeedback = useCallback(async () => {
+        if (!sessionId) {
+            return;
+        }
+
+        try {
+            setFeedbackStatus('pending');
+            setFeedbackError(null);
+            setCanViewFeedback(false);
+            setIsRatingModalOpen(false);
+            setShowFeedback(false);
+            await triggerFeedbackGeneration(sessionId);
+            beginFeedbackPolling();
+        } catch (error) {
+            console.error('Failed to regenerate feedback:', error);
+            const message = error?.response?.data?.detail || 'Unable to regenerate feedback right now. Please try again later.';
+            setFeedbackStatus('failed');
+            setFeedbackError(message);
+            if (typeof addToast === 'function') {
+                addToast(message, 'error');
+            }
+        }
+    }, [sessionId, beginFeedbackPolling, addToast]);
 
     const handleReturnToDashboard = () => {
         if (existingRating.rating > 0) {
@@ -355,14 +551,13 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         }
     };
 
-    const postAnswer = async (params) => {
-        const response = await interviewApi.post(`/interview/${sessionId}/answer`, params);
+    const postAnswer = async (formData) => {
+        const response = await interviewApi.post(`/interview/${sessionId}/answer`, formData);
         const {
             next_question,
             next_question_meta,
             acknowledgment,
             completed,
-            feedback,
             question_number,
             current_max_questions,
         } = response.data;
@@ -372,25 +567,10 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         }
 
         if (completed) {
-            setIsAnalyzingFinal(true);
-            if (acknowledgment) {
-                addToast(acknowledgment);
-            }
-
-            const formattedFeedback = feedback
-                ? (typeof feedback === 'string' ? { full_feedback: feedback } : feedback)
-                : null;
-
-            setFinalFeedback(formattedFeedback);
-            setShowFeedback(false);
-            setIsAnswering(false);
-            setAnswer('');
-            setCodingSubmission(null);
-            setAnswerError('');
-            setTimeout(() => {
-                setIsComplete(true);
-                setIsAnalyzingFinal(false);
-            }, 300);
+            clearToastTimer();
+            toastTimerRef.current = setTimeout(() => {
+                beginFeedbackPolling();
+            }, 1100);
             return;
         }
 
@@ -409,19 +589,33 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         setCodingSubmission(null);
         setAnswerError('');
         if (acknowledgment) {
+            clearToastTimer();
             addToast(acknowledgment);
+            toastTimerRef.current = setTimeout(() => {
+                toastTimerRef.current = null;
+            }, 1100);
         }
 
         setIsAnalyzingFinal(false);
     };
 
-    const handleSubmitAnswer = async () => {
-        if (!answer.trim()) {
-            setAnswerError('Answer cannot be empty');
-            if (answerInputRef.current) {
-                answerInputRef.current.focus({ preventScroll: true });
+    const handleSubmitAnswer = async (isAutoSubmit = false) => {
+        // For manual submit, validate answers
+        if (!isAutoSubmit) {
+            if (isSystemDesignQuestion) {
+                if (!hasValidDiagram) {
+                    setSystemDesignError('Please add at least one component to your design before submitting.');
+                    return;
+                }
             }
-            return;
+
+            if (!answer.trim() && !isSystemDesignQuestion) {
+                setAnswerError('Answer cannot be empty');
+                if (answerInputRef.current) {
+                    answerInputRef.current.focus({ preventScroll: true });
+                }
+                return;
+            }
         }
 
         setAnswerError('');
@@ -429,25 +623,49 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
         setIsLoading(true);
         stopSpeechRecognition();
-        if (isFinalQuestion) {
-            setIsAnalyzingFinal(true);
-        } else {
-            setIsAnalyzingFinal(false);
-        }
+        setIsAnalyzingFinal(isFinalQuestion);
 
         try {
-            const params = new URLSearchParams();
-            params.append('answer', answer);
+            const formData = new FormData();
+            formData.append('answer', isSystemDesignQuestion && systemDesignDiagram ? systemDesignDiagram : answer);
             if (question?.id != null) {
-                params.append('question_id', String(question.id));
+                formData.append('question_id', String(question.id));
             }
             if (question?.type) {
-                params.append('question_type', question.type);
+                formData.append('question_type', question.type);
             }
-            await postAnswer(params);
+            if (isSystemDesignQuestion && systemDesignDiagram) {
+                formData.append('system_design_diagram', systemDesignDiagram);
+            }
+            if (isFinalQuestion) {
+                formData.append('is_final', 'true');
+            }
+            // Only capture video for speech-based questions (not coding or system design)
+            if (shouldRecordVideo) {
+                const videoBlob = await captureVideoClip();
+                if (videoBlob) {
+                    const extension = videoBlob.type === 'video/mp4' ? 'mp4' : 'webm';
+                    formData.append('response_video', videoBlob, `session-${sessionId}-q${questionNumber}.${extension}`);
+                }
+            }
+            await postAnswer(formData);
         } catch (error) {
             console.error('Error submitting answer:', error);
-            setAnswerError('Failed to submit answer. Please try again.');
+            const message = error?.response?.data?.detail && !/^\d{3}/.test(error.response.data.detail)
+                ? error.response.data.detail
+                : 'We couldn\'t generate your feedback right now. Please regenerate the report.';
+            if (isFinalQuestion) {
+                setFeedbackError(message);
+                setFeedbackStatus('failed');
+                setIsComplete(true);
+                setIsAnalyzingFinal(false);
+                if (typeof addToast === 'function') {
+                    addToast(message, 'error');
+                }
+            } else {
+                setAnswerError('Failed to submit answer. Please try again.');
+                setIsAnalyzingFinal(false);
+            }
         } finally {
             setIsLoading(false);
             if (!isFinalQuestion) {
@@ -455,6 +673,9 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             }
         }
     };
+
+    // Keep ref updated for auto-submit timer
+    handleSubmitAnswerRef.current = handleSubmitAnswer;
 
     const handleSubmitCoding = async (submission) => {
         setCodingSubmission(submission);
@@ -473,33 +694,53 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             setIsAnalyzingFinal(false);
         }
         try {
-            const params = new URLSearchParams();
-            params.append('answer', submission.stdout || submission.code);
-            params.append('code', submission.code);
+            const formData = new FormData();
+            formData.append('answer', submission.stdout || submission.code);
+            formData.append('code', submission.code);
             if (submission.stdin) {
-                params.append('stdin', submission.stdin);
+                formData.append('stdin', submission.stdin);
             }
             if (submission.stdout) {
-                params.append('stdout', submission.stdout);
+                formData.append('stdout', submission.stdout);
             }
             if (submission.stderr) {
-                params.append('stderr', submission.stderr);
+                formData.append('stderr', submission.stderr);
             }
             if (submission.internalError) {
-                params.append('runtime_error', submission.internalError);
+                formData.append('runtime_error', submission.internalError);
             }
-            params.append('execution_success', submission.success ? 'true' : 'false');
-            params.append('has_run', submission.hasRun ? 'true' : 'false');
+            formData.append('execution_success', submission.success ? 'true' : 'false');
+            formData.append('has_run', submission.hasRun ? 'true' : 'false');
             if (question?.id != null) {
-                params.append('question_id', String(question.id));
+                formData.append('question_id', String(question.id));
             }
             if (question?.type) {
-                params.append('question_type', question.type);
+                formData.append('question_type', question.type);
             }
-            await postAnswer(params);
+            if (isFinalQuestion) {
+                formData.append('is_final', 'true');
+            }
+            // No video capture for coding questions - only for speech-based
+            await postAnswer(formData);
         } catch (error) {
             console.error('Error submitting code answer:', error);
-            alert('Failed to submit your code. Please try again.');
+            const message = error?.response?.data?.detail && !/^\d{3}/.test(error.response.data.detail)
+                ? error.response.data.detail
+                : 'We couldn\'t generate your feedback right now. Please regenerate the report.';
+            if (isFinalQuestion) {
+                setFeedbackError(message);
+                setFeedbackStatus('failed');
+                setIsComplete(true);
+                setIsAnalyzingFinal(false);
+                if (typeof addToast === 'function') {
+                    addToast(message, 'error');
+                } else {
+                    alert(message);
+                }
+            } else {
+                alert(message);
+                setIsAnalyzingFinal(false);
+            }
         } finally {
             setIsLoading(false);
             if (!isFinalQuestion) {
@@ -507,49 +748,6 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             }
         }
     };
-
-    if (isComplete) {
-        if (showFeedback) {
-            return (
-                <div className="interview-screen">
-                    <FeedbackScreen
-                        sessionId={sessionId}
-                        preloadedFeedback={finalFeedback ? finalFeedback : null}
-                    />
-                    {!isRatingModalOpen && (
-                        <div className="completion-actions">
-                            <button
-                                className="return-dashboard-button"
-                                onClick={handleReturnToDashboard}
-                            >
-                                Return to Dashboard
-                            </button>
-                        </div>
-                    )}
-                    <SessionRatingModal
-                        isOpen={isRatingModalOpen}
-                        defaultRating={existingRating.rating}
-                        defaultComments={existingRating.comments}
-                        onSubmit={handleRatingSubmit}
-                    />
-                </div>
-            );
-        }
-
-        return (
-            <div className="interview-screen">
-                <SessionCompleted
-                    onGetFeedback={() => setShowFeedback(true)}
-                />
-                <SessionRatingModal
-                    isOpen={isRatingModalOpen && !showFeedback}
-                    defaultRating={existingRating.rating}
-                    defaultComments={existingRating.comments}
-                    onSubmit={handleRatingSubmit}
-                />
-            </div>
-        );
-    }
 
     const rawSkills = question?.raw?.mandatory_skills ?? keySkills;
     const skillList = Array.isArray(rawSkills)
@@ -573,7 +771,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
     const renderQuestionText = (rawText) => {
         const sourceText = typeof rawText === 'string' && rawText.trim().length > 0
-            ? rawText.replace(/\\n/g, '\n')
+            ? rawText.replace(/\n/g, '\n')
             : 'Loading question...';
 
         const lines = sourceText.split(/\r?\n/);
@@ -585,7 +783,6 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             let match;
             let tokenIndex = 0;
 
-            // Check if line starts with "- " to convert to bullet point
             const isBulletPoint = line.trimStart().startsWith('- ');
             const processedLine = isBulletPoint ? line.trimStart().substring(2) : line;
 
@@ -631,7 +828,270 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         });
     };
 
+    // Only record video for Speech Based questions (not for coding or system design)
+    const shouldRecordVideo = useMemo(() => {
+        if (isCodingQuestion || isSystemDesignQuestion) return false;
+        return isAnswering;
+    }, [isCodingQuestion, isSystemDesignQuestion, isAnswering]);
+
+    const handleVideoReady = useCallback(() => {
+        setVideoReady(true);
+        setVideoError(null);
+    }, []);
+
+    const handleVideoError = useCallback((error) => {
+        console.error('Camera error:', error);
+        setVideoError(error);
+    }, []);
+
+    const handleVideoStatusChange = useCallback((status) => {
+        setVideoStatus(status);
+    }, []);
+
+    const stopVideoSegment = useCallback(async () => {
+        if (!videoRecorderRef.current) {
+            return null;
+        }
+        try {
+            return await videoRecorderRef.current.stopAndGetBlob();
+        } catch (error) {
+            console.error('Failed to stop video recording:', error);
+            setVideoError(error);
+            return null;
+        }
+    }, []);
+
+    const startVideoSegment = useCallback(async () => {
+        if (!videoRecorderRef.current || !videoRecorderRef.current.isReady()) {
+            return;
+        }
+        if (videoRecorderRef.current.isRecording()) {
+            return;
+        }
+        try {
+            await videoRecorderRef.current.startNewSegment();
+        } catch (error) {
+            console.error('Failed to start video recording:', error);
+            setVideoError(error);
+        }
+    }, []);
+
+    const captureVideoClip = useCallback(async () => {
+        if (!videoReady || !videoRecorderRef.current) {
+            return null;
+        }
+        setIsVideoUploading(true);
+        try {
+            return await stopVideoSegment();
+        } finally {
+            setIsVideoUploading(false);
+        }
+    }, [stopVideoSegment, videoReady]);
+
+    useEffect(() => {
+        if (!videoReady || !shouldRecordVideo || isComplete) {
+            return;
+        }
+
+        let didCancel = false;
+
+        const ensureRecording = async () => {
+            if (didCancel) {
+                return;
+            }
+            await startVideoSegment();
+        };
+
+        ensureRecording();
+
+        return () => {
+            didCancel = true;
+        };
+    }, [questionNumber, videoReady, shouldRecordVideo, startVideoSegment, isComplete]);
+
+    useEffect(() => {
+        if (!isComplete) {
+            return;
+        }
+        stopVideoSegment();
+    }, [isComplete, stopVideoSegment]);
+
+    const handleStartAnsweringWithVideo = () => {
+        handleStartAnswering();
+        startVideoSegment();
+    };
+
     const showAnalyzingOverlay = isAnalyzingFinal && !isComplete;
+
+    const videoStatusLabel = (() => {
+        switch (videoStatus) {
+            case 'recording':
+                return 'Recording';
+            case 'ready':
+                return 'Ready';
+            case 'requesting':
+                return 'Requesting camera access…';
+            case 'error':
+                return 'Camera unavailable';
+            default:
+                return 'Idle';
+        }
+    })();
+
+    const isPreInterview = questionNumber === 1 && !isAnswering;
+
+    const clampFloatingPanelPosition = useCallback((desiredX, desiredY, panelSize) => {
+        const panelWidth = panelSize?.width ?? floatingPanelRef.current?.offsetWidth ?? 0;
+        const panelHeight = panelSize?.height ?? floatingPanelRef.current?.offsetHeight ?? 0;
+        if (!panelWidth || !panelHeight) {
+            return { x: desiredX, y: desiredY };
+        }
+
+        const MIN_VISIBLE_EDGE = 36;
+        const viewportWidth = window.innerWidth || 0;
+        const viewportHeight = window.innerHeight || 0;
+
+        const minX = MIN_VISIBLE_EDGE - panelWidth;
+        const maxX = Math.max(minX, viewportWidth - MIN_VISIBLE_EDGE);
+        const minY = MIN_VISIBLE_EDGE - panelHeight;
+        const maxY = Math.max(minY, viewportHeight - MIN_VISIBLE_EDGE);
+
+        const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+        return {
+            x: clamp(desiredX, minX, maxX),
+            y: clamp(desiredY, minY, maxY),
+        };
+    }, []);
+
+    const handleFloatingPanelPointerMove = useCallback((event) => {
+        const dragState = floatingPanelDragRef.current;
+        if (!dragState) {
+            return;
+        }
+
+        const desiredX = event.clientX - dragState.offsetX;
+        const desiredY = event.clientY - dragState.offsetY;
+        setFloatingPanelPosition(clampFloatingPanelPosition(desiredX, desiredY, dragState));
+    }, [clampFloatingPanelPosition]);
+
+    const handleFloatingPanelPointerUp = useCallback(() => {
+        floatingPanelDragRef.current = null;
+        window.removeEventListener('pointermove', handleFloatingPanelPointerMove);
+        window.removeEventListener('pointerup', handleFloatingPanelPointerUp);
+    }, [handleFloatingPanelPointerMove]);
+
+    const handleFloatingPanelPointerDown = useCallback((event) => {
+        if (isPreInterview) {
+            return;
+        }
+
+        if (event.button !== undefined && event.button !== 0) {
+            return;
+        }
+
+        const panelRect = floatingPanelRef.current?.getBoundingClientRect();
+        if (!panelRect) {
+            return;
+        }
+
+        event.preventDefault();
+        floatingPanelDragRef.current = {
+            offsetX: event.clientX - panelRect.left,
+            offsetY: event.clientY - panelRect.top,
+            width: panelRect.width,
+            height: panelRect.height,
+        };
+
+        window.addEventListener('pointermove', handleFloatingPanelPointerMove);
+        window.addEventListener('pointerup', handleFloatingPanelPointerUp);
+    }, [handleFloatingPanelPointerMove, handleFloatingPanelPointerUp, isPreInterview]);
+
+    useEffect(() => () => {
+        window.removeEventListener('pointermove', handleFloatingPanelPointerMove);
+        window.removeEventListener('pointerup', handleFloatingPanelPointerUp);
+    }, [handleFloatingPanelPointerMove, handleFloatingPanelPointerUp]);
+
+    useEffect(() => {
+        if (isPreInterview) {
+            setFloatingPanelPosition(null);
+            return;
+        }
+
+        const panelRect = floatingPanelRef.current?.getBoundingClientRect();
+        if (!panelRect) {
+            return;
+        }
+
+        setFloatingPanelPosition((current) => {
+            if (current) {
+                return clampFloatingPanelPosition(current.x, current.y, panelRect);
+            }
+
+            const defaultX = window.innerWidth - panelRect.width - 32;
+            const defaultY = window.innerHeight - panelRect.height - 32;
+            return clampFloatingPanelPosition(defaultX, defaultY, panelRect);
+        });
+    }, [clampFloatingPanelPosition, isPreInterview]);
+
+    const videoPanelClasses = ['video-panel', isPreInterview ? 'video-panel--start' : 'video-panel--floating'];
+
+    const floatingPanelStyle = !isPreInterview && floatingPanelPosition
+        ? {
+            left: `${floatingPanelPosition.x}px`,
+            top: `${floatingPanelPosition.y}px`,
+            right: 'auto',
+            bottom: 'auto',
+            cursor: floatingPanelDragRef.current ? 'grabbing' : 'grab',
+        }
+        : undefined;
+
+    const ratingModal = (
+        <SessionRatingModal
+            isOpen={isRatingModalOpen}
+            defaultRating={existingRating.rating}
+            defaultComments={existingRating.comments}
+            onSubmit={handleRatingSubmit}
+        />
+    );
+
+    if (isComplete) {
+        if (showFeedback && canViewFeedback) {
+            return (
+                <div className="interview-screen">
+                    <FeedbackScreen
+                        sessionId={sessionId}
+                        preloadedFeedback={finalFeedback ? finalFeedback : null}
+                    />
+                    {!isRatingModalOpen && (
+                        <div className="completion-actions">
+                            <button
+                                className="return-dashboard-button"
+                                onClick={handleReturnToDashboard}
+                            >
+                                Return to Dashboard
+                            </button>
+                        </div>
+                    )}
+                    {ratingModal}
+                </div>
+            );
+        }
+
+        return (
+            <div className="interview-screen">
+                <SessionCompleted
+                    key="session-completed"
+                    status={feedbackStatus}
+                    errorMessage={feedbackError}
+                    onRetry={handleRegenerateFeedback}
+                    onGetFeedback={handleViewFeedback}
+                    canViewFeedback={canViewFeedback}
+                />
+                {ratingModal}
+            </div>
+        );
+    }
 
     return (
         <div className="interview-screen">
@@ -669,7 +1129,59 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                             <span className="header-value">{formattedIndustry}</span>
                         </div>
                     </div>
+                    {/* Question Timer */}
+                    {!isPreInterview && timeRemaining !== null && (
+                        <div className={`question-timer ${timeRemaining <= 30 ? 'question-timer--warning' : ''} ${timeRemaining <= 10 ? 'question-timer--critical' : ''}`}>
+                            <div className="question-timer__circle">
+                                <svg viewBox="0 0 36 36" className="question-timer__svg">
+                                    <path
+                                        className="question-timer__bg"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                    />
+                                    <path
+                                        className="question-timer__progress"
+                                        strokeDasharray={`${(timeRemaining / questionTimeLimitSeconds) * 100}, 100`}
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                    />
+                                </svg>
+                                <span className="question-timer__text">{formatTime(timeRemaining)}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
+
+                {/* Only show video panel for speech-based questions or during pre-interview */}
+                {(isPreInterview || shouldRecordVideo) && (
+                    <div
+                        className={videoPanelClasses.join(' ')}
+                        aria-live="polite"
+                        style={!isPreInterview ? floatingPanelStyle : undefined}
+                        onPointerDown={handleFloatingPanelPointerDown}
+                        ref={!isPreInterview ? floatingPanelRef : undefined}
+                    >
+                        {isPreInterview && (
+                            <div className="video-panel__header video-panel__header--compact">
+                                <span className={`video-status-tag video-status-tag--${videoStatus}`}>
+                                    {videoStatusLabel}
+                                </span>
+                            </div>
+                        )}
+                        <VideoRecorder
+                            ref={videoRecorderRef}
+                            onReady={handleVideoReady}
+                            onError={handleVideoError}
+                            onStatusChange={handleVideoStatusChange}
+                            muted
+                            showStatusText={false}
+                        />
+                        {isVideoUploading && (
+                            <p className="video-panel__hint">Uploading your response video…</p>
+                        )}
+                        {videoError && (
+                            <p className="video-panel__error" role="alert">Camera access failed. Please allow camera permissions and refresh.</p>
+                        )}
+                    </div>
+                )}
 
                 <div className={columnsClass}>
                     <div className={questionColumnClass}>
@@ -703,11 +1215,36 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                                 enforceSqlOnly={isSqlQuestion}
                             />
                         </div>
+                    ) : isSystemDesignQuestion ? (
+                        questionNumber === 1 && !isAnswering ? (
+                            <button className="start-answering-button" onClick={handleStartAnsweringWithVideo}>
+                                Start Interview
+                            </button>
+                        ) : (
+                            <div className="system-design-answer-card system-design-answer-card--compact">
+                                <div className="system-design-answer-card__actions">
+                                    <button type="button" onClick={() => setIsSystemDesignModalOpen(true)}>
+                                        Open Design Canvas
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="system-design-submit-btn"
+                                        onClick={handleSubmitAnswer}
+                                        disabled={!hasValidDiagram || isLoading}
+                                    >
+                                        {isLoading ? 'Submitting...' : 'Submit Design'}
+                                    </button>
+                                </div>
+                                {systemDesignError && (
+                                    <p className="system-design-error" role="alert">{systemDesignError}</p>
+                                )}
+                            </div>
+                        )
                     ) : (
                         <div className="answering-container">
                             {questionNumber === 1 && !isAnswering ? (
-                                <button className="start-answering-button" onClick={handleStartAnswering}>
-                                    Start answering
+                                <button className="start-answering-button" onClick={handleStartAnsweringWithVideo}>
+                                    Start Interview
                                 </button>
                             ) : (
                                 <>
@@ -740,9 +1277,9 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                                             type="button"
                                             className="submit-answer-button"
                                             onClick={handleSubmitAnswer}
-                                            disabled={isLoading}
+                                            disabled={isLoading || isVideoUploading}
                                         >
-                                            {isLoading ? 'Submitting…' : 'Submit answer'}
+                                            {isLoading || isVideoUploading ? 'Submitting…' : 'Submit answer'}
                                         </button>
                                     </div>
                                 </>
@@ -751,6 +1288,29 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                     )}
                 </div>
             </div>
+            {isSystemDesignModalOpen && (
+                <div className="system-design-modal-overlay system-design-modal-overlay--full">
+                    <div className="system-design-canvas-modal system-design-canvas-modal--fullscreen">
+                        <button
+                            type="button"
+                            className="system-design-canvas-modal__close"
+                            onClick={() => setIsSystemDesignModalOpen(false)}
+                            aria-label="Close canvas"
+                        >
+                            ✕
+                        </button>
+                        <SystemDesignCanvas
+                            initialDiagram={systemDesignDiagram}
+                            onDiagramChange={(diagram) => {
+                                setSystemDesignDiagram(diagram);
+                                setSystemDesignError('');
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {ratingModal}
         </div>
     );
 }

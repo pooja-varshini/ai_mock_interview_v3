@@ -3,28 +3,25 @@ import axios from 'axios';
 // Centralized Axios instances for different backends
 
 export const interviewApi = axios.create({
-  baseURL: 'https://mockinterview-backend.futurense.com',
+  baseURL: 'http://localhost:8001',
 });
 // export const interviewApi = axios.create({
 //   baseURL: 'https://mirella-predeficient-preoccupiedly.ngrok-free.dev',
 //   headers: { 'ngrok-skip-browser-warning': 'true' },
 // });
 export const adminApi = axios.create({
-  baseURL: 'https://mockinterview-backend.futurense.com',
+  baseURL: 'http://localhost:8001',
 });
 
 export const backendApi = axios.create({
-  baseURL: 'https://mockinterview-backend.futurense.com',
+  baseURL: 'http://localhost:8001',
 });
 
-export const pistonApi = axios.create({
-  baseURL: 'https://emkc.org/api/v2/piston',
-  timeout: 15000,
-});
+// Piston is self-hosted behind the FastAPI backend; the frontend never talks
+// to the Piston container directly to avoid CORS issues.
+export const fetchPistonRuntimes = () => backendApi.get('/piston/runtimes');
 
-export const fetchPistonRuntimes = () => pistonApi.get('/runtimes');
-
-export const executeWithPiston = (payload) => pistonApi.post('/execute', payload);
+export const executeWithPiston = (payload) => backendApi.post('/piston/execute', payload);
 
 // export const backendApi = axios.create({
 //   baseURL: 'https://mirella-predeficient-preoccupiedly.ngrok-free.dev',
@@ -86,17 +83,52 @@ export const fetchAdminPerformanceAnalytics = (params = {}) =>
   adminApi.get('/admin/analytics/performance', { params });
 export const fetchAdminInsights = () => adminApi.get('/admin/analytics/insights');
 
+// Admin program / role mapping helpers
+export const fetchAdminJobRoles = () => adminApi.get('/admin/job-roles');
+
+export const mapProgramRoles = (payload) =>
+  adminApi.post('/admin/programs/map-roles', payload);
+
+export const fetchAdminUbpPerformance = () =>
+  adminApi.get('/admin/analytics/ubp-performance');
+
+export const fetchAdminRetention = () =>
+  adminApi.get('/admin/analytics/retention');
+
 export const fetchAdminLeaderboard = (params = {}) =>
-  adminApi.get('/admin/analytics/leaderboard', { params });
+  adminApi.get('/admin/leaderboard', { params });
+
+export const fetchAdminLeaderboardFilters = () =>
+  adminApi.get('/admin/filter-options');
+
+export const fetchAdminRoleFilterOptions = (params = {}) =>
+  adminApi.get('/admin/filter-options/roles', { params });
+
+export const createInterviewQuestion = (payload) => adminApi.post('/admin/interview-questions', payload);
+
+export const bulkUploadInterviewQuestions = (formData) =>
+  adminApi.post('/admin/interview-questions/bulk-upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
 
 export const fetchAdminSessionReport = (sessionId) =>
   adminApi.get(`/admin/session/${sessionId}/detailed`);
+
+export const fetchAdminStudentAnalytics = (studentId) =>
+  adminApi.get(`/admin/student/${studentId}/analytics`);
 
 export const fetchSessionRating = (sessionId, email) =>
   backendApi.get(`/students/sessions/${sessionId}/rating`, { params: { student_email: email } });
 
 export const submitSessionRating = (sessionId, email, payload) =>
   backendApi.post(`/students/sessions/${sessionId}/rating`, payload, { params: { student_email: email } });
+
+// Feedback async helpers
+export const getFeedbackStatus = (sessionId) =>
+  backendApi.get(`/feedback-status/${sessionId}`);
+
+export const triggerFeedbackGeneration = (sessionId) =>
+  backendApi.post(`/interview/${sessionId}/generate-feedback`);
 
 // Admin authentication helpers
 let adminAuthToken = null;
@@ -126,7 +158,7 @@ export const fetchUbpBatches = (universityName, programName) =>
 export const resolveUbp = (universityName, programName, batchLabel) =>
   backendApi.get('/ubp/resolve', { params: { university_name: universityName, program_name: programName, batch_label: batchLabel } });
 
-// Interview options cascading from interview_questions table
+// Student/public interview options cascading from interview_questions table
 export const fetchInterviewIndustries = () => backendApi.get('/interview-options/industries');
 export const fetchInterviewCompanies = (industry) =>
   backendApi.get('/interview-options/companies', { params: { industry } });
@@ -142,5 +174,26 @@ export const fetchIndustryJobRoles = (industry, company, interviewType, workExpe
       interview_type: interviewType,
       work_experience: workExperience,
       ...(programName ? { program_name: programName } : {}),
+    },
+  });
+
+// Admin interview options cascading (AdminPage) - uses dedicated admin routes
+export const fetchAdminIndustries = () => adminApi.get('/admin/industry-types');
+export const fetchBulkUploadOptions = () => adminApi.get('/admin/bulk-upload-options');
+export const fetchAdminCompanies = (industry) =>
+  adminApi.get('/admin/interview-options/companies', { params: { industry } });
+export const fetchAdminIndustryInterviewTypes = (industry, company) =>
+  adminApi.get('/admin/interview-options/interview-types', { params: { industry, company } });
+export const fetchAdminIndustryWorkExperience = (industry, company, interviewType) =>
+  adminApi.get('/admin/interview-options/work-experience', {
+    params: { industry, company, interview_type: interviewType },
+  });
+export const fetchAdminIndustryJobRoles = (industry, company, interviewType, workExperience) =>
+  adminApi.get('/admin/interview-options/job-roles', {
+    params: {
+      industry,
+      company,
+      interview_type: interviewType,
+      work_experience: workExperience,
     },
   });

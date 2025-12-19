@@ -61,7 +61,7 @@
 
 .admin-score--good,
 .admin-score.admin-score--good {
-  color: #8ff7c7;
+  color: #36d28f;
 }
 
 .admin-score--average,
@@ -71,7 +71,7 @@
 
 .admin-score--low,
 .admin-score.admin-score--low {
-  color: #ff8f8f;
+  color: #e64545;
 }
 
 .admin-button-text,
@@ -173,7 +173,7 @@
   left: 0;
   height: 100vh;
   width: var(--admin-sidebar-width);
-  border-radius: 20px;
+  border-radius: 0;
   border: 1px solid rgba(216, 209, 255, 0.9);
   background: var(--admin-surface);
   box-shadow: var(--admin-shadow);
@@ -255,8 +255,8 @@
 
 .admin-hamburger--floating {
   position: fixed;
-  top: clamp(1.5rem, 1.2rem + 1vw, 2.5rem);
-  left: clamp(1.5rem, 1.2rem + 1vw, 2.5rem);
+  top: clamp(0.75rem, 0.6rem + 0.6vw, 1.5rem);
+  left: clamp(1rem, 0.8rem + 0.7vw, 2rem);
   z-index: 60;
   transition: top 0.3s ease, left 0.3s ease, transform 0.3s ease;
 }
@@ -295,7 +295,7 @@
 .admin-tabs {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.4rem;
   margin-top: 1.75rem;
 }
 
@@ -449,10 +449,9 @@
 
 .admin-section__head {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0.85rem;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: flex-start; /* left-align headings and subtitles */
+  gap: 0.25rem;
 }
 
 .admin-filters {
@@ -463,10 +462,24 @@
   margin-bottom: 1rem;
 }
 
+.admin-filters__actions {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+.admin-filters__status {
+  font-size: 0.8rem;
+  color: var(--admin-text-muted);
+}
+
 .admin-filter {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  flex: 1 1 200px; /* let each filter grow to fill available width */
 }
 
 .admin-filter label {
@@ -484,8 +497,88 @@
   color: var(--admin-text-primary);
   padding: 0.6rem 0.85rem;
   min-width: 220px;
+  width: 100%;
   font-size: 0.9rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-filter select {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Sessions tab: make filters more compact */
+.admin-filters--sessions-main {
+  justify-content: flex-start;
+}
+
+.admin-filters--sessions-main .admin-filter {
+  flex: 0 0 220px;   /* cap Student / Email width even tighter */
+  max-width: 260px;
+}
+
+.admin-filters--sessions-main .admin-filter input {
+  min-width: 0;
+}
+
+.admin-filters--sessions-meta .admin-filter {
+  flex: 1 1 160px;
+}
+
+/* Score row: small fixed-width inputs + buttons, single horizontal row */
+.admin-filters--sessions-score {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.admin-filters--sessions-score .admin-filter {
+  flex: 0 0 auto;
+}
+
+.admin-filters--sessions-score .admin-filter input {
+  width: 80px;
+  min-width: 80px;
+  max-width: 90px;
+}
+
+.admin-filters--sessions-score .admin-button-text,
+.admin-filters--sessions-score .admin-button-text--ghost {
+  margin-top: 0;
+}
+
+/* Students tab: make name/email/status filters more compact */
+.admin-filters--students-main {
+  justify-content: flex-start;
+}
+
+.admin-filters--students-main .admin-filter {
+  flex: 0 0 220px;
+  max-width: 260px;
+}
+
+.admin-filters--students-main .admin-filter input {
+  min-width: 0;
+}
+
+.admin-filters--students-status {
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.admin-filters--students-status .admin-filter {
+  flex: 0 0 220px;
+  max-width: 260px;
+}
+
+.admin-filters--students-status .admin-filter select {
+  min-width: 0;
+}
+
+.admin-filters--students-status .admin-button-text,
+.admin-filters--students-status .admin-button-text--ghost {
+  margin-top: 0;
 }
 
 .admin-filter input:focus,
@@ -512,11 +605,663 @@
   font-size: clamp(1.05rem, 0.95rem + 0.8vw, 1.6rem);
   letter-spacing: 0.03em;
   color: var(--admin-text-primary);
+  text-align: left;
 }
 
 .admin-section__hint {
   font-size: 0.9rem;
   color: var(--admin-text-muted);
+  text-align: left;
+}
+
+ .admin-panel--form {
+  gap: 1.1rem; /* slightly tighter vertical rhythm */
+  padding: clamp(1.4rem, 1.05rem + 0.9vw, 1.9rem);
+  background: linear-gradient(135deg, #ffffff, #f6f7ff);
+}
+
+.admin-question-card {
+  padding-top: 1.25rem;
+  margin-bottom: 2.4rem; /* add breathing room between single and bulk sections */
+  width: 880px;      /* fixed, non-responsive width for single & bulk upload */
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+ .admin-question-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+}
+
+.admin-question-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.admin-question-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.admin-question-subtitle {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--admin-text-muted);
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.25rem;
+}
+
+.admin-form-grid--question-meta {
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+}
+
+/* Bulk-style form grids: stack fields vertically like a Google Form */
+.admin-form-grid--bulk-meta {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+/* Row 2: 3 columns for dropdowns, no inner panel */
+.admin-form-grid--bulk-secondary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+/* Form sections - no borders, just spacing */
+.admin-form-section {
+  margin-top: 1.5rem;
+}
+
+/* Skills section with gradient background */
+.admin-form-section--skills {
+  background: linear-gradient(135deg, rgba(238, 242, 255, 0.5), rgba(237, 233, 254, 0.5));
+  border-radius: 1.5rem;
+  padding: 2rem;
+  margin-top: 2rem;
+  border: 1px solid rgba(165, 180, 252, 0.3);
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.08);
+}
+
+/* Question & Predefined Answer side by side (equal widths) */
+.admin-question-main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.admin-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-form-field--full {
+  grid-column: 1 / -1;
+}
+
+/* Mandatory Skills: full width in its section */
+.admin-form-field--mandatory-skills {
+  max-width: 100%;
+}
+
+.admin-form-field--mandatory-skills input {
+  padding: 0.85rem 1rem;
+  font-size: 0.95rem;
+}
+
+/* Stack vertically on smaller screens */
+@media (max-width: 900px) {
+  .admin-question-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-form-section {
+    padding: 1rem;
+  }
+}
+
+/* Enhanced labels: semibold with more spacing */
+.admin-form-field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #374151;
+  margin-bottom: 0.75rem;
+  text-align: left;
+}
+
+.admin-select-wrapper {
+  position: relative;
+  display: flex;
+}
+
+.admin-select-wrapper select {
+  width: 100%;
+  padding-right: 2.2rem;
+}
+
+.admin-select-arrow {
+  position: absolute;
+  right: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.65rem;
+  color: var(--admin-text-muted);
+  pointer-events: none;
+}
+
+/* Make asterisks more prominent and consistent across labels */
+.admin-form-field label span,
+.admin-multiselect label span,
+.admin-bulk-upload-label span {
+  color: #e53935;
+  font-weight: 600;
+  margin-left: 0.15rem;
+}
+
+/* Red asterisk for required fields */
+.admin-required {
+  color: #e53935;
+  font-weight: 600;
+  margin-left: 0.1rem;
+}
+
+ /* Modern field styling with shadows instead of heavy borders */
+ .admin-form-field select,
+ .admin-form-field input {
+  border-radius: 1rem;
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  padding: 1rem 1.25rem;
+  font-size: 0.95rem;
+  color: var(--admin-text-primary);
+  background: #fff;
+  min-height: 52px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  width: 100%; /* make all dropdowns/inputs use full field width for equal sizing */
+}
+
+.admin-form-field select:hover,
+.admin-form-field input:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.admin-form-field select:focus,
+.admin-form-field input:focus {
+  outline: none;
+  border-color: rgba(165, 180, 252, 0.6);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.12);
+}
+
+/* Textareas with modern styling */
+.admin-form-field textarea {
+  border-radius: 1rem;
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  padding: 1rem 1.25rem;
+  font-size: 0.95rem;
+  color: var(--admin-text-primary);
+  background: #fff;
+  resize: vertical;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.admin-form-field textarea:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.admin-form-field textarea:focus {
+  outline: none;
+  border-color: rgba(165, 180, 252, 0.6);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.12);
+}
+
+/* Question & Predefined Answer: same min-height for visual consistency */
+.admin-form-field textarea#q-question,
+.admin-form-field textarea#q-pre-def-answer {
+  min-height: 140px;
+}
+
+/* Action buttons for question form */
+.admin-form-actions--question {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+}
+
+.admin-button-text--primary {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-button-text--primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
+}
+
+.admin-button-text--primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-form-field select:disabled,
+.admin-form-field input:disabled,
+.admin-form-field textarea:disabled {
+  background: rgba(240, 238, 255, 0.65);
+  color: var(--admin-text-muted);
+  cursor: not-allowed;
+}
+
+/* Enhanced focus states with subtle shadow */
+.admin-form-field select:focus,
+.admin-form-field input:focus {
+  outline: none;
+  border-color: rgba(108, 99, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+}
+
+.admin-form-field textarea:focus {
+  outline: none;
+  border-color: rgba(108, 99, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(108, 99, 255, 0.12), 0 0 0 3px rgba(108, 99, 255, 0.1);
+}
+
+.admin-form-error {
+  font-size: 0.8rem;
+  color: #b3261e;
+}
+
+.admin-form-hint {
+  font-size: 0.85rem;
+  color: var(--admin-text-muted);
+}
+
+.admin-form-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.admin-form-actions--spread {
+  gap: 0.75rem;
+}
+
+.admin-bulk-upload-file {
+  margin-top: 0.5rem;
+}
+
+.admin-bulk-upload-dropzone {
+  border-radius: 16px;
+  border: 1px dashed rgba(175, 163, 255, 0.9);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(247, 244, 255, 0.96));
+  padding: 1.75rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  text-align: center;
+  color: var(--admin-text-secondary);
+  cursor: pointer;
+}
+
+.admin-bulk-upload-dropzone__title {
+  font-weight: 600;
+}
+
+.admin-bulk-upload-dropzone__subtitle {
+  font-size: 0.9rem;
+  color: var(--admin-text-muted);
+}
+
+.admin-bulk-upload-input {
+  display: none;
+}
+
+.admin-bulk-upload-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--admin-text-muted);
+}
+
+.admin-bulk-upload-note__icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.admin-bulk-upload-label {
+  display: block;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--admin-text-muted);
+  margin-bottom: 0.45rem;
+}
+
+/* Enhanced info banner with left border accent and icon space */
+.admin-bulk-info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(243, 244, 246, 0.95), rgba(238, 242, 255, 0.9));
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-left: 4px solid #7c3aed;
+  color: var(--admin-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+}
+
+.admin-bulk-info-box::before {
+  content: '💡';
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.admin-bulk-summary-box {
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  color: var(--admin-text-secondary);
+  font-size: 0.9rem;
+}
+
+.admin-bulk-summary-box ul {
+  margin: 0.5rem 0 0 1.25rem;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.admin-bulk-summary-box li {
+  margin-bottom: 0.25rem;
+}
+
+.admin-bulk-csv-info {
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.admin-bulk-csv-columns {
+  margin: 0.75rem 0 0 1.5rem;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--admin-text-secondary);
+}
+
+.admin-bulk-csv-columns--left {
+  text-align: left;
+  margin-left: 1rem;
+  padding-left: 1rem;
+}
+
+.admin-bulk-csv-columns li {
+  margin-bottom: 0.35rem;
+  text-align: left;
+}
+
+/* MultiSelect component styles */
+.admin-multiselect {
+  position: relative;
+}
+
+.admin-multiselect__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 52px;
+  padding: 0.75rem 1.25rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  background: #fff;
+  color: var(--admin-text-primary);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.admin-multiselect__trigger:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.admin-multiselect__trigger:focus {
+  outline: none;
+  border-color: rgba(165, 180, 252, 0.6);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.12);
+}
+
+.admin-multiselect__trigger--disabled {
+  background: rgba(240, 238, 255, 0.65);
+  color: var(--admin-text-muted);
+  cursor: not-allowed;
+}
+
+.admin-multiselect__values {
+  display: flex;
+  flex-wrap: nowrap; /* keep everything on a single line */
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+  max-height: 28px;
+  overflow: hidden; /* clip extra content instead of wrapping */
+  /* Hide inner scrollbar but keep scrolling behavior */
+  scrollbar-width: none; /* Firefox */
+}
+
+.admin-multiselect__values::-webkit-scrollbar {
+  display: none; /* Chrome, Edge, Safari */
+}
+
+.admin-multiselect__placeholder {
+  color: var(--admin-text-muted);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+/* Selected value text in single-select dropdown */
+.admin-multiselect__values > span:not(.admin-multiselect__placeholder):not(.admin-multiselect__chip):not(.admin-multiselect__chip--summary) {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--admin-text-primary);
+}
+
+/* Improve placeholder contrast in standard fields */
+.admin-form-field input::placeholder,
+.admin-form-field textarea::placeholder {
+  color: #9ca3af;
+}
+
+.admin-multiselect__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(229, 231, 235, 0.9);
+  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Summary chip for "+N more" */
+.admin-multiselect__chip--summary {
+  background: transparent;
+  color: #6b7280;
+}
+
+.admin-multiselect__chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  margin-left: 0.1rem;
+}
+
+.admin-multiselect__chip-remove:hover {
+  color: #374151;
+}
+
+.admin-multiselect__arrow {
+  color: var(--admin-text-muted);
+  font-size: 0.65rem;
+  transition: transform 0.2s ease;
+}
+
+.admin-multiselect__arrow--open {
+  transform: rotate(180deg);
+}
+
+.admin-multiselect__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.admin-multiselect__dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(210, 203, 255, 0.9);
+  background: var(--admin-surface);
+  box-shadow: 0 8px 24px rgba(76, 64, 201, 0.15);
+}
+
+.admin-multiselect__option {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  color: var(--admin-text-primary);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.admin-multiselect__option span:first-child {
+  flex: 1;
+  text-align: left;
+}
+
+.admin-multiselect__option:hover {
+  background: rgba(108, 99, 255, 0.06);
+}
+
+.admin-multiselect__option--selected {
+  background: rgba(139, 92, 246, 0.08);
+}
+
+/* Highlight user-created options (values typed by the user) */
+.admin-multiselect__option--custom {
+  color: #2563eb; /* blue accent to distinguish custom entries */
+}
+
+.admin-multiselect__option--empty {
+  color: var(--admin-text-muted);
+  font-style: italic;
+  cursor: default;
+}
+
+.admin-multiselect__check {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+/* CreatableMultiSelect input field */
+.admin-multiselect__input {
+  flex: 1;
+  min-width: 80px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.95rem;
+  color: var(--admin-text-primary);
+  padding: 0;
+  margin: 0;
+}
+
+.admin-multiselect__input::placeholder {
+  color: var(--admin-text-muted);
+}
+
+/* Override global input focus glow for the inline multiselect input */
+.admin-multiselect__input:focus {
+  border: none;
+  box-shadow: none;
+}
+
+/* Focused state for the trigger */
+.admin-multiselect__trigger--focused {
+  border-color: rgba(108, 99, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+}
+
+/* Create new option style */
+.admin-multiselect__option--create {
+  background: var(--admin-surface);
+  color: var(--admin-text-secondary);
+  font-weight: 500;
+  font-style: italic;
+}
+
+.admin-multiselect__option--create:hover {
+  background: rgba(108, 99, 255, 0.06);
 }
 
 .admin-section--split {
@@ -536,6 +1281,11 @@
   gap: 0.95rem;
   position: relative;
   color: var(--admin-text-primary);
+}
+
+.admin-panel.admin-question-card {
+  background: linear-gradient(135deg, #f9f8ff, #eef0ff);
+  border-color: rgba(165, 180, 252, 0.4);
 }
 
 .admin-panel--loading,
@@ -593,6 +1343,7 @@
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.98), rgba(247, 244, 255, 0.96), rgba(240, 236, 255, 0.95));
   border: 1px solid rgba(204, 194, 255, 0.7);
   box-shadow: var(--admin-shadow-soft);
+  min-height: 150px;
 }
 
 .admin-metric {
@@ -635,11 +1386,33 @@
   min-width: 720px;
 }
 
+.admin-pagination {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--admin-text-muted);
+}
+
+.admin-pagination__info {
+  min-width: 120px;
+  text-align: center;
+}
+
 .admin-table thead {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.75rem;
   color: var(--admin-text-muted);
+}
+
+.admin-table thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(246, 244, 255, 0.98);
+  z-index: 1;
 }
 
 .admin-table th,
@@ -824,6 +1597,17 @@
   color: var(--admin-text-muted);
 }
 
+@media (max-width: 1024px) {
+  .admin-form-grid--question-meta,
+  .admin-form-grid--bulk-meta {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .admin-question-main {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .admin-page {
     padding: var(--space-2);
@@ -839,7 +1623,7 @@
     height: calc(100vh - 2 * clamp(1.25rem, 1rem + 1vw, 2rem));
     max-width: min(85vw, 320px);
     width: min(85vw, 320px);
-    border-radius: 18px;
+    border-radius: 0;
     transform: translateX(-120%);
   }
 
@@ -854,4 +1638,274 @@
 }
 
 @media (max-width: 480px) {
+}
+
+/* ========================================
+   MultiSelect V2 - Tags below dropdown
+   ======================================== */
+.admin-multiselect-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-multiselect-v2__label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.25rem;
+}
+
+.admin-required-star {
+  color: #ef4444;
+  margin-left: 0.25rem;
+}
+
+.admin-multiselect-v2__select-wrapper {
+  position: relative;
+}
+
+.admin-multiselect-v2__select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  padding-right: 2.5rem;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 0.75rem;
+  font-size: 0.9rem;
+  color: #475569;
+  cursor: pointer;
+  appearance: none;
+  transition: all 0.2s ease;
+}
+
+.admin-multiselect-v2__select:hover {
+  border-color: #cbd5e1;
+}
+
+.admin-multiselect-v2__select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.admin-multiselect-v2__select--disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.admin-multiselect-v2__chevron {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.admin-multiselect-v2__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* Tags */
+.admin-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.admin-tag--blue {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.admin-tag--green {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.admin-tag--purple {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.admin-tag--orange {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.admin-tag__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0.15rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+  transition: all 0.15s ease;
+}
+
+.admin-tag__remove:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Add new roles link button */
+.admin-add-roles-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #3b82f6;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  margin-top: 0.25rem;
+}
+
+.admin-add-roles-link:hover {
+  color: #2563eb;
+}
+
+.admin-add-roles-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ========================================
+   Program Role Mapping Overlay tweaks
+   (light variant of shared feedback modal)
+   ======================================== */
+
+.feedback-modal-backdrop.feedback-modal-backdrop--light {
+  /* Much lighter dimming than the default dark dashboard modal */
+  background:
+    radial-gradient(circle at top, rgba(129, 140, 248, 0.20), transparent 55%),
+    rgba(15, 23, 42, 0.35);
+}
+
+.feedback-modal.feedback-modal--light {
+  background: linear-gradient(135deg, #f9f8ff, #eef1ff);
+  border-color: rgba(165, 180, 252, 0.55);
+  box-shadow: 0 26px 80px -40px rgba(79, 70, 229, 0.45);
+  max-width: 880px; /* tighter overlay width, closer to form width */
+  width: 100%;
+  max-height: min(78vh, 720px);
+}
+
+.feedback-modal__header.feedback-modal__header--roles {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom-color: rgba(199, 210, 254, 0.7);
+}
+
+.feedback-modal__header.feedback-modal__header--roles h3 {
+  margin: 0;
+  color: #0f172a;
+  font-family: var(--font-family-heading, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.feedback-modal__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.feedback-modal__back:hover {
+  color: #1e3a8a;
+  text-decoration: underline;
+}
+
+/* Remove inner card box for the Program Role Mapping form inside the light modal */
+.feedback-modal.feedback-modal--light .admin-panel--form.admin-question-card {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  max-width: 100%;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Make the Map Job Roles form more compact inside the light modal */
+.feedback-modal.feedback-modal--light .feedback-modal__body {
+  padding: 0 1.4rem 0; /* no vertical padding */
+  overflow-x: hidden; /* prevent horizontal scrollbar */
+}
+
+.feedback-modal.feedback-modal--light .admin-form-section {
+  margin-top: 0.25rem;
+}
+
+.feedback-modal.feedback-modal--light .admin-form-grid--bulk-meta {
+  gap: 0.65rem;
+  max-width: 720px;   /* shared width for all dropdown rows */
+  margin-left: 0;
+  margin-right: auto; /* anchor column to the left side of modal */
+}
+
+.feedback-modal.feedback-modal--light .admin-form-field label {
+  margin-bottom: 0.2rem;
+  font-size: 0.8rem;
+}
+
+.feedback-modal.feedback-modal--light .admin-inline-success {
+  margin: 0.3rem 0 0.1rem;
+  font-size: 0.72rem;
+  color: #166534;
+  background: #ecfdf3;
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start; /* prevent stretching full width as a flex item */
+  border: 1px solid rgba(22, 163, 74, 0.25);
+}
+
+.feedback-modal.feedback-modal--light .admin-form-field select,
+.feedback-modal.feedback-modal--light .admin-form-field input {
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.feedback-modal.feedback-modal--light .admin-multiselect__trigger {
+  min-height: 2.2rem;
+  padding: 0.45rem 0.75rem;
+}
+
+/* Match the New Job Roles multiselect width to the same column width */
+.feedback-modal.feedback-modal--light .admin-multiselect {
+  max-width: 720px;
+  margin-left: 0;
+  margin-right: auto; /* align with dropdown column on the left */
 }

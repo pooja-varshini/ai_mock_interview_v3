@@ -40,6 +40,14 @@
     margin-bottom: 30px;
 }
 
+.session-completed-error {
+    margin-bottom: 24px;
+}
+
+.session-completed-retry {
+    margin-top: 12px;
+}
+
 .feedback-button {
     background-color: #3498db;
     color: white;
@@ -50,6 +58,7 @@
     border-radius: 8px;
     cursor: pointer;
     transition: background-color 0.3s ease;
+    margin-top: 12px;
 }
 
 .feedback-button:hover {

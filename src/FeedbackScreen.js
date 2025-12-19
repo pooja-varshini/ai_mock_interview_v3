@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
     FiChevronDown,
     FiChevronUp,
@@ -10,7 +10,8 @@ import {
     FiUsers,
     FiLayers,
 } from 'react-icons/fi';
-import { interviewApi } from './api';
+import { interviewApi, getFeedbackStatus, triggerFeedbackGeneration } from './api';
+import SystemDesignViewer from './SystemDesignViewer';
 import './FeedbackScreen.css';
 
 const classifyScore = (score) => {
@@ -22,6 +23,8 @@ const classifyScore = (score) => {
     if (value >= 2) return 'average';
     return 'low';
 };
+
+const FRIENDLY_FEEDBACK_ERROR = "We couldn't generate your feedback right now. Please regenerate the report.";
 
 const parseFeedback = (payload) => {
     if (!payload) return { structured: null, raw: null };
@@ -178,43 +181,199 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
     const [feedback, setFeedback] = useState({ structured: null, raw: null });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [openQuestion, setOpenQuestion] = useState(0);
+    const [openQuestions, setOpenQuestions] = useState(() => new Set([0]));
+    const [isRegenerating, setIsRegenerating] = useState(false);
+    const [feedbackStatus, setFeedbackStatus] = useState('pending');
+    const [expandedCode, setExpandedCode] = useState(null);
+    const [expandedDiagram, setExpandedDiagram] = useState(null);
     const triggerRefs = useRef([]);
+    const statusPollingRef = useRef(null);
 
-    useEffect(() => {
-        const fetchFeedback = async () => {
-            setIsLoading(true);
+    const clearStatusPolling = useCallback(() => {
+        if (statusPollingRef.current) {
+            clearInterval(statusPollingRef.current);
+            statusPollingRef.current = null;
+        }
+    }, []);
+
+    const fetchFeedback = useCallback(
+        async ({ skipLoading = false } = {}) => {
+            if (!sessionId) {
+                return false;
+            }
+
+            if (!skipLoading) {
+                setIsLoading(true);
+            }
+
             try {
                 const response = await interviewApi.get(`/feedback/${sessionId}`);
                 const parsed = parseFeedback(response.data?.feedback);
-                if (!parsed.structured && !parsed.raw) {
-                    throw new Error('Invalid feedback format from server.');
+                const backendStatus = response?.data?.status;
+
+                const isStillGenerating = response?.status === 202
+                    || backendStatus === 'pending'
+                    || backendStatus === 'processing';
+
+                if (!parsed.structured) {
+                    if (isStillGenerating) {
+                        setFeedbackStatus('pending');
+                        setError(null);
+                        if (!skipLoading) {
+                            setIsLoading(true);
+                        }
+                        return false;
+                    }
+                    throw new Error('Structured feedback missing');
                 }
+
                 setFeedback(parsed);
+                setError(null);
+                setFeedbackStatus('completed');
+                return true;
             } catch (err) {
                 console.error('Error fetching feedback:', err);
-                setError('Failed to load feedback. Please try again later.');
+                setFeedback({ structured: null, raw: null });
+                setError(FRIENDLY_FEEDBACK_ERROR);
+                setFeedbackStatus('failed');
+                return false;
             } finally {
                 setIsLoading(false);
             }
-        };
+        },
+        [sessionId]
+    );
 
-        if (preloadedFeedback) {
-            if (preloadedFeedback.error) {
-                setError(preloadedFeedback.error);
-            } else {
-                setFeedback(parseFeedback(preloadedFeedback));
-            }
-            setIsLoading(false);
-        } else if (sessionId) {
-            fetchFeedback();
+    const checkFeedbackStatus = useCallback(async () => {
+        if (!sessionId) {
+            return;
         }
-    }, [sessionId, preloadedFeedback]);
 
-    const questions = useMemo(() => feedback.structured?.questions || [], [feedback]);
+        try {
+            const { data } = await getFeedbackStatus(sessionId);
+            const status = data?.status || 'pending';
+            const statusError = data?.error || null;
+
+            setFeedbackStatus(status);
+
+            if (status === 'completed') {
+                clearStatusPolling();
+                setError(null);
+                const fetched = await fetchFeedback({ skipLoading: true });
+                if (!fetched) {
+                    beginStatusPolling();
+                }
+            } else if (status === 'failed') {
+                clearStatusPolling();
+                setError(statusError || FRIENDLY_FEEDBACK_ERROR);
+                setFeedback({ structured: null, raw: null });
+                setIsLoading(false);
+            } else {
+                setError(null);
+                setIsLoading(true);
+            }
+        } catch (err) {
+            console.error('Failed to check feedback status:', err);
+            clearStatusPolling();
+            setFeedbackStatus('failed');
+            setError('We could not verify the feedback status. Please regenerate the report.');
+            setFeedback({ structured: null, raw: null });
+            setIsLoading(false);
+        }
+    }, [sessionId, fetchFeedback, clearStatusPolling]);
+
+    const beginStatusPolling = useCallback(() => {
+        if (!sessionId) {
+            return;
+        }
+
+        clearStatusPolling();
+        setFeedbackStatus('pending');
+        setError(null);
+        setIsLoading(true);
+        checkFeedbackStatus();
+        statusPollingRef.current = setInterval(checkFeedbackStatus, 7000);
+    }, [sessionId, checkFeedbackStatus, clearStatusPolling]);
+
+    useEffect(() => {
+        if (preloadedFeedback) { 
+            clearStatusPolling();
+            if (preloadedFeedback.error) {
+                setFeedbackStatus('failed');
+                setError(FRIENDLY_FEEDBACK_ERROR);
+                setFeedback({ structured: null, raw: null });
+                setIsLoading(false);
+            } else {
+                const parsed = parseFeedback(preloadedFeedback);
+                if (parsed.structured) {
+                    setFeedback(parsed);
+                    setError(null);
+                    setFeedbackStatus('completed');
+                    setIsLoading(false);
+                } else {
+                    beginStatusPolling();
+                }
+            }
+        } else if (sessionId) {
+            beginStatusPolling();
+        }
+    }, [sessionId, preloadedFeedback, beginStatusPolling, clearStatusPolling]);
+
+    useEffect(() => () => {
+        clearStatusPolling();
+    }, [clearStatusPolling]);
 
     const hasStructured = Boolean(feedback.structured);
     const metadata = feedback.structured?.metadata || {};
+    const questions = useMemo(() => feedback.structured?.questions || [], [feedback]);
+
+    useEffect(() => {
+        setOpenQuestions((prev) => {
+            if (!questions.length) {
+                return new Set();
+            }
+
+            const next = new Set(Array.from(prev).filter((idx) => idx < questions.length));
+            if (!next.size) {
+                next.add(0);
+            }
+            return next;
+        });
+    }, [questions]);
+
+    const toggleQuestion = useCallback((idx) => {
+        setOpenQuestions((prev) => {
+            const next = new Set(prev);
+            if (next.has(idx)) {
+                next.delete(idx);
+            } else {
+                next.add(idx);
+            }
+            return next;
+        });
+    }, []);
+
+    const handleRegenerate = useCallback(async () => {
+        if (!sessionId || isRegenerating) {
+            return;
+        }
+
+        try {
+            setIsRegenerating(true);
+            setError(null);
+            await triggerFeedbackGeneration(sessionId);
+            beginStatusPolling();
+        } catch (err) {
+            console.error('Error regenerating feedback:', err);
+            setError(FRIENDLY_FEEDBACK_ERROR);
+        } finally {
+            setIsRegenerating(false);
+            if (feedbackStatus !== 'pending') {
+                setIsLoading(false);
+            }
+        }
+    }, [sessionId, isRegenerating, beginStatusPolling, triggerFeedbackGeneration, feedbackStatus]);
+
     const technical = feedback.structured?.technical_summary;
     const communication = feedback.structured?.communication_summary;
     const attitude = feedback.structured?.attitude_summary;
@@ -256,7 +415,9 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
             <div className="feedback-screen error">
                 <h2>Oops! Something went wrong.</h2>
                 <p>{error}</p>
-                <button onClick={() => window.location.reload()}>Try Again</button>
+                <button type="button" onClick={handleRegenerate} disabled={isRegenerating}>
+                    {isRegenerating ? 'Regenerating…' : 'Regenerate Feedback'}
+                </button>
             </div>
         );
     }
@@ -266,11 +427,18 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
             <div className="feedback-screen error">
                 <h2>No Feedback Available</h2>
                 <p>We were unable to load the feedback for this session.</p>
+                <button type="button" onClick={handleRegenerate} disabled={isRegenerating}>
+                    {isRegenerating ? 'Regenerating…' : 'Regenerate Feedback'}
+                </button>
             </div>
         );
     }
 
     const handleQuestionKeyDown = (event, index) => {
+        if (!questions.length) {
+            return;
+        }
+
         if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
             event.preventDefault();
             const next = (index + 1) % questions.length;
@@ -317,7 +485,7 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                         <div className="accordion-list">
                             {questions.map((item, idx) => {
                                 const tone = classifyScore(item.score);
-                                const isOpen = openQuestion === idx;
+                                const isOpen = openQuestions.has(idx);
                                 const triggerId = `question-trigger-${idx}`;
                                 const panelId = `question-panel-${idx}`;
                                 const questionNumber = item.number ?? idx + 1;
@@ -325,6 +493,42 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                 const scoreTone = rawScore == null ? 'neutral' : rawScore >= 3.5 ? 'great' : rawScore >= 2 ? 'average' : 'low';
                                 const scoreLabel = rawScore != null ? `Score: ${formatScoreDisplay(rawScore)}/5` : 'Score: —';
                                 const answerText = item.original_answer || item.answer;
+                                const questionTypeValue = (item.question_type || '').toLowerCase();
+                                const isCoding = Boolean(item.is_coding) || questionTypeValue === 'coding' || questionTypeValue.startsWith('coding ');
+                                // Detect system design from question_type OR from answer containing diagram JSON
+                                const candidateDiagram = (() => {
+                                    try {
+                                        const parsed = typeof answerText === 'string' ? JSON.parse(answerText) : answerText;
+                                        if (parsed?.nodes) {
+                                            console.log('[FeedbackScreen] Candidate diagram parsed:', { nodes: parsed.nodes?.length, edges: parsed.edges?.length, raw: parsed });
+                                        }
+                                        return parsed?.nodes ? parsed : null;
+                                    } catch (e) { 
+                                        console.log('[FeedbackScreen] Candidate diagram parse error:', e.message);
+                                        return null; 
+                                    }
+                                })();
+                                const isSystemDesign = questionTypeValue.includes('system') && questionTypeValue.includes('design') || candidateDiagram !== null;
+                                // Parse better_example as diagram JSON for system design questions
+                                const suggestedDiagram = isSystemDesign ? (() => {
+                                    try {
+                                        const parsed = typeof item.better_example === 'string' ? JSON.parse(item.better_example) : item.better_example;
+                                        if (parsed?.nodes) {
+                                            console.log('[FeedbackScreen] Suggested diagram parsed:', { nodes: parsed.nodes?.length, edges: parsed.edges?.length });
+                                        } else {
+                                            console.log('[FeedbackScreen] better_example is not a diagram:', typeof item.better_example, item.better_example?.substring?.(0, 200));
+                                        }
+                                        return parsed?.nodes ? parsed : null;
+                                    } catch (e) { 
+                                        console.log('[FeedbackScreen] Suggested diagram parse error:', e.message, 'Raw:', item.better_example?.substring?.(0, 200));
+                                        return null; 
+                                    }
+                                })() : null;
+                                const codeLanguage = questionTypeValue.includes('sql')
+                                    ? 'SQL'
+                                    : questionTypeValue.includes('python')
+                                    ? 'Python'
+                                    : '';
                                 return (
                                     <div
                                         className={`accordion-item tone-${tone} ${isOpen ? 'expanded' : ''}`}
@@ -333,7 +537,7 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                         <button
                                             className="accordion-trigger"
                                             type="button"
-                                            onClick={() => setOpenQuestion(isOpen ? -1 : idx)}
+                                            onClick={() => toggleQuestion(idx)}
                                             aria-expanded={isOpen}
                                             aria-controls={panelId}
                                             id={triggerId}
@@ -363,16 +567,65 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                                 role="region"
                                                 aria-labelledby={`${triggerId}-label`}
                                             >
-                                                {answerText ? (
-                                                    <div className="detail-block">
-                                                        <h4>Your answer</h4>
-                                                        <p>{answerText}</p>
+                                                {isSystemDesign && candidateDiagram ? (
+                                                    <div className="detail-block detail-block--system-design">
+                                                        <h4>Your Design</h4>
+                                                        <div className="diagram-block-container">
+                                                            <button
+                                                                type="button"
+                                                                className="code-expand-button"
+                                                                aria-label="Expand your design"
+                                                                onClick={() =>
+                                                                    setExpandedDiagram({
+                                                                        title: 'Your Design',
+                                                                        questionNumber,
+                                                                        diagram: candidateDiagram,
+                                                                    })
+                                                                }
+                                                            >
+                                                                ⤢
+                                                            </button>
+                                                            <div className="diagram-block">
+                                                                <SystemDesignViewer diagram={candidateDiagram} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : answerText && !isSystemDesign ? (
+                                                    <div className={`detail-block ${isCoding ? 'detail-block--code' : ''}`}>
+                                                        <h4>
+                                                            Your answer
+                                                            {codeLanguage ? ` (${codeLanguage})` : ''}
+                                                        </h4>
+                                                        {isCoding ? (
+                                                            <div className="code-block-container">
+                                                                <button
+                                                                    type="button"
+                                                                    className="code-expand-button"
+                                                                    aria-label="Expand your code answer"
+                                                                    onClick={() =>
+                                                                        setExpandedCode({
+                                                                            title: 'Your answer',
+                                                                            language: codeLanguage,
+                                                                            questionNumber,
+                                                                            code: answerText || '',
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    ⤢
+                                                                </button>
+                                                                <pre className="code-block" aria-label="Your code answer">
+                                                                    <code>{answerText}</code>
+                                                                </pre>
+                                                            </div>
+                                                        ) : (
+                                                            <p>{answerText}</p>
+                                                        )}
                                                     </div>
                                                 ) : null}
                                                 {item.strengths?.length ? (
                                                     <div className="detail-block">
                                                         <h4>What you did well</h4>
-                                                        <ul>{item.strengths.map((point, sIdx) => <li key={`str-${idx}-${sIdx}`}>{point}</li>)}</ul>
+                                                        <p>{item.strengths.join(' ')}</p>
                                                     </div>
                                                 ) : null}
                                                 {item.improvements?.length ? (
@@ -381,10 +634,60 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                                         <p>{item.improvements.join(' ')}</p>
                                                     </div>
                                                 ) : null}
-                                                {item.better_example ? (
-                                                    <div className="detail-block">
-                                                        <h4>Suggested answer</h4>
-                                                        <p>{item.better_example}</p>
+                                                {isSystemDesign && suggestedDiagram ? (
+                                                    <div className="detail-block detail-block--system-design">
+                                                        <h4>Suggested Design</h4>
+                                                        <div className="diagram-block-container">
+                                                            <button
+                                                                type="button"
+                                                                className="code-expand-button"
+                                                                aria-label="Expand suggested design"
+                                                                onClick={() =>
+                                                                    setExpandedDiagram({
+                                                                        title: 'Suggested Design',
+                                                                        questionNumber,
+                                                                        diagram: suggestedDiagram,
+                                                                    })
+                                                                }
+                                                            >
+                                                                ⤢
+                                                            </button>
+                                                            <div className="diagram-block">
+                                                                <SystemDesignViewer diagram={suggestedDiagram} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : null}
+                                                {item.better_example && !suggestedDiagram ? (
+                                                    <div className={`detail-block ${isCoding ? 'detail-block--code' : ''}`}>
+                                                        <h4>
+                                                            Suggested answer
+                                                            {codeLanguage ? ` (${codeLanguage})` : ''}
+                                                        </h4>
+                                                        {isCoding ? (
+                                                            <div className="code-block-container">
+                                                                <button
+                                                                    type="button"
+                                                                    className="code-expand-button"
+                                                                    aria-label="Expand suggested code answer"
+                                                                    onClick={() =>
+                                                                        setExpandedCode({
+                                                                            title: 'Suggested answer',
+                                                                            language: codeLanguage,
+                                                                            questionNumber,
+                                                                            code: item.better_example || '',
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    ⤢
+                                                                </button>
+                                                                <pre className="code-block" aria-label="Suggested code answer">
+                                                                    <code>{item.better_example}</code>
+                                                                </pre>
+                                                            </div>
+                                                        ) : (
+                                                            <p>{item.better_example}</p>
+                                                        )}
                                                     </div>
                                                 ) : null}
                                             </div>
@@ -459,15 +762,65 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                         </div>
                     </section>
                 ) : null}
-
-                {!hasStructured && feedback.raw ? (
-                    <section className="raw-section">
-                        <h3>Raw Feedback (fallback)</h3>
-                        <p className="raw-hint">Structured insights were unavailable. Displaying the original AI response below.</p>
-                        <pre>{feedback.raw}</pre>
-                    </section>
-                ) : null}
             </div>
+            {expandedCode && (
+                <div
+                    className="code-modal-backdrop"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={`Expanded code for question ${expandedCode.questionNumber}`}
+                >
+                    <div className="code-modal">
+                        <header className="code-modal__header">
+                            <h3>
+                                {expandedCode.title}
+                                {expandedCode.language ? ` (${expandedCode.language})` : ''} – Question{' '}
+                                {expandedCode.questionNumber}
+                            </h3>
+                            <button
+                                type="button"
+                                className="code-modal__close"
+                                onClick={() => setExpandedCode(null)}
+                                aria-label="Close expanded code"
+                            >
+                                ×
+                            </button>
+                        </header>
+                        <div className="code-modal__body">
+                            <pre className="code-modal__block">
+                                <code>{expandedCode.code}</code>
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {expandedDiagram && (
+                <div
+                    className="diagram-modal-backdrop"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={`Expanded diagram for question ${expandedDiagram.questionNumber}`}
+                >
+                    <div className="diagram-modal">
+                        <header className="diagram-modal__header">
+                            <h3>
+                                {expandedDiagram.title} – Question {expandedDiagram.questionNumber}
+                            </h3>
+                            <button
+                                type="button"
+                                className="diagram-modal__close"
+                                onClick={() => setExpandedDiagram(null)}
+                                aria-label="Close expanded diagram"
+                            >
+                                ×
+                            </button>
+                        </header>
+                        <div className="diagram-modal__body">
+                            <SystemDesignViewer diagram={expandedDiagram.diagram} />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

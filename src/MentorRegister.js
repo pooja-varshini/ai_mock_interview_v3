@@ -1,12 +1,110 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { importStudentsCsv, fetchUniversities, fetchUbpPrograms, fetchUbpBatches, resolveUbp } from './api';
 import './MentorRegister.css';
+
+const ImportSummaryModal = ({ result, onClose }) => {
+  const modalRef = useRef(null);
+
+  useEffect(() => {
+    if (!result || !modalRef.current) {
+      return;
+    }
+
+    const rafId = requestAnimationFrame(() => {
+      modalRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [result]);
+
+  if (!result) {
+    return null;
+  }
+
+  const duplicates = Array.isArray(result.duplicates_ignored) ? result.duplicates_ignored : [];
+  const errors = Array.isArray(result.errors) ? result.errors : [];
+
+  return (
+    <div className="mentor-summary-modal-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="mentor-summary-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-summary-title"
+        ref={modalRef}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="mentor-summary-close" onClick={onClose} aria-label="Close import summary">✕</button>
+
+        <div className="mentor-register-success" role="status">
+          ✅ Upload successful!.
+        </div>
+
+        <h2 id="import-summary-title">Import summary</h2>
+        <ul>
+          <li><strong>Total rows processed:</strong> {result.total_rows}</li>
+          <li><strong>Students imported:</strong> {result.imported}</li>
+          <li><strong>Emails sent:</strong> {result.email_sent}</li>
+          <li><strong>Duplicates ignored:</strong> {duplicates.length}</li>
+        </ul>
+
+        {duplicates.length > 0 && (
+          <div className="mentor-register-duplicates">
+            <h3>Ignored duplicates</h3>
+            <p>The following emails were already registered and were skipped:</p>
+            <ul>
+              {duplicates.map((duplicate) => (
+                <li key={`${duplicate.email}-${duplicate.row}`}>
+                  <span className="duplicate-email">{duplicate.email}</span>
+                  {typeof duplicate.row === 'number' ? <span className="duplicate-meta"> (row {duplicate.row})</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {errors.length > 0 && (
+          <div className="mentor-register-errors">
+            <h3>Rows requiring attention</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Row</th>
+                  <th>Email</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {errors.map((rowError, idx) => (
+                  <tr key={`${rowError.row}-${idx}`}>
+                    <td>{rowError.row}</td>
+                    <td>{rowError.email || '—'}</td>
+                    <td>{rowError.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mentor-summary-footer">
+          <button type="button" className="mentor-summary-close-button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const MentorRegister = () => {
   const [file, setFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+
+  const fileInputRef = useRef(null);
 
   // UBP selections
   const [universities, setUniversities] = useState([]);
@@ -21,6 +119,7 @@ const MentorRegister = () => {
     setFile(event.target.files?.[0] || null);
     setResult(null);
     setError('');
+    setIsSummaryOpen(false);
   };
 
   useEffect(() => {
@@ -111,13 +210,54 @@ const MentorRegister = () => {
     try {
       setIsSubmitting(true);
       const response = await importStudentsCsv(formData);
-      setResult(response.data);
+      const result = response.data;
+      
+      // Check if there are invalid email errors
+      const hasInvalidEmails = result.errors && result.errors.some(error => 
+        error.reason === 'Invalid email format' || 
+        error.reason.includes('email') ||
+        error.reason.includes('Invalid')
+      );
+      
+      if (hasInvalidEmails && result.imported === 0) {
+        // If no students were imported and there are invalid emails, show error message
+        setError('The CSV file contains invalid email addresses. Please check the file and correct the email formats before uploading.');
+      } else {
+        // Otherwise show the summary modal (which will include the errors)
+        setResult(result);
+        setIsSummaryOpen(true);
+      }
     } catch (err) {
-      const message = err.response?.data?.detail || 'Failed to import students. Please try again.';
-      setError(message);
+      const errorDetail = err.response?.data?.detail || '';
+      if (errorDetail.includes('Invalid email format') || 
+          errorDetail.includes('value is not a valid email address') ||
+          errorDetail.includes('invalid emails')) {
+        setError('The CSV file contains invalid email addresses. Please check the file and correct the email formats before uploading.');
+      } else {
+        setError(errorDetail || 'Failed to import students. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const resetFormState = () => {
+    setFile(null);
+    setResult(null);
+    setError('');
+    setIsSummaryOpen(false);
+    setSelectedUniversity('');
+    setSelectedProgram('');
+    setSelectedBatch('');
+    setPrograms([]);
+    setBatches([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSummaryClose = () => {
+    resetFormState();
   };
 
   const downloadedSample = () => {
@@ -224,7 +364,13 @@ const MentorRegister = () => {
           </select>
 
           <label className="file-picker">
-            <input type="file" accept=".csv" onChange={handleFileChange} disabled={isSubmitting} />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleFileChange}
+              disabled={isSubmitting}
+            />
             <span>{file ? file.name : 'Choose CSV file...'}</span>
           </label>
 
@@ -235,60 +381,7 @@ const MentorRegister = () => {
 
         {error && <div className="mentor-register-error">{error}</div>}
 
-        {result && (
-          <div className="mentor-register-summary">
-            <div className="mentor-register-success" role="status">
-              ✅ Upload successful! All valid students have been enrolled.
-            </div>
-
-            <h2>Import summary</h2>
-            <ul>
-              <li><strong>Total rows processed:</strong> {result.total_rows}</li>
-              <li><strong>Students imported:</strong> {result.imported}</li>
-              <li><strong>Emails sent:</strong> {result.email_sent}</li>
-              <li><strong>Duplicates ignored:</strong> {Array.isArray(result.duplicates_ignored) ? result.duplicates_ignored.length : 0}</li>
-            </ul>
-
-            {Array.isArray(result.duplicates_ignored) && result.duplicates_ignored.length > 0 && (
-              <div className="mentor-register-duplicates">
-                <h3>Ignored duplicates</h3>
-                <p>The following emails were already registered and were skipped:</p>
-                <ul>
-                  {result.duplicates_ignored.map((duplicate) => (
-                    <li key={`${duplicate.email}-${duplicate.row}`}>
-                      <span className="duplicate-email">{duplicate.email}</span>
-                      {typeof duplicate.row === 'number' ? <span className="duplicate-meta"> (row {duplicate.row})</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {Array.isArray(result.errors) && result.errors.length > 0 && (
-              <div className="mentor-register-errors">
-                <h3>Rows requiring attention</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Row</th>
-                      <th>Email</th>
-                      <th>Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.errors.map((rowError, idx) => (
-                      <tr key={`${rowError.row}-${idx}`}>
-                        <td>{rowError.row}</td>
-                        <td>{rowError.email || '—'}</td>
-                        <td>{rowError.reason}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+        <ImportSummaryModal result={isSummaryOpen ? result : null} onClose={handleSummaryClose} />
       </div>
     </div>
   );

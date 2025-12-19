@@ -511,12 +511,16 @@ body {
 
 .feedback-modal__close {
     background: transparent;
-    border: 1px solid rgba(151, 121, 255, 0.4);
+    border: 1px solid rgba(56, 47, 88, 0.4);
     color: #dcd5ff;
     width: 36px;
     height: 36px;
-    display: grid;
-    place-items: center;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-size: 18px;
     border-radius: 50%;
     cursor: pointer;
     transition: background 0.2s ease, color 0.2s ease;
