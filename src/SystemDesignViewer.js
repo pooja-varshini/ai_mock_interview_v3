@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import ReactFlow, { Background, Controls, MiniMap, ReactFlowProvider, Handle, Position, MarkerType } from 'reactflow';
+import ReactFlow, { Background, ReactFlowProvider, Handle, Position, MarkerType } from 'reactflow';
 import 'reactflow/dist/style.css';
 import './SystemDesignViewer.css';
 
@@ -125,11 +125,6 @@ const DiagramCanvas = ({ nodes, edges, title }) => {
                     zoomOnScroll={true}
                 >
                     <Background variant="dots" gap={16} size={1} color="rgba(140, 120, 200, 0.3)" />
-                    <Controls showInteractive={false} />
-                    <MiniMap
-                        nodeColor={(node) => node.data?.bgColor || node.data?.color || '#6366f1'}
-                        maskColor="rgba(10, 8, 20, 0.8)"
-                    />
                 </ReactFlow>
             </div>
         </div>

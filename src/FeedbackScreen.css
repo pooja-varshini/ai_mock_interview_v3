@@ -62,13 +62,12 @@
 
 .feedback-screen {
     min-height: 100vh;
-    padding: clamp(40px, 6vw, 60px) clamp(20px, 5vw, 60px);
-    background: radial-gradient(circle at top, rgba(102, 70, 200, 0.25), transparent 55%),
-                linear-gradient(160deg, #090812 0%, #120b22 40%, #0b0b15 100%);
+    padding: clamp(24px, 4vw, 40px) clamp(20px, 5vw, 60px);
+    background: linear-gradient(180deg, #0d081a 0%, #100821 40%, #0b0718 100%);
     display: flex;
     justify-content: center;
-    color: #e8e4ff;
     font-family: var(--font-family-body);
+    color: #E6E1FF;
 }
 
 .accordion-trigger .chevron {

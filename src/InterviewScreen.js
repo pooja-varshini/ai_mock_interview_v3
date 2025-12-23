@@ -111,6 +111,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const [systemDesignError, setSystemDesignError] = useState('');
     const [timeRemaining, setTimeRemaining] = useState(null);
     const timerRef = useRef(null);
+    const timerDeadlineRef = useRef(null);
     const autoSubmitTriggeredRef = useRef(false);
 
     const clearFeedbackPolling = useCallback(() => {
@@ -202,13 +203,18 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const rawQuestionType = question?.raw?.question_type ?? question?.type ?? '';
     const normalizedQuestionType = typeof rawQuestionType === 'string' ? rawQuestionType.trim().toLowerCase() : '';
     const isSqlQuestion = isCodingQuestion && normalizedQuestionType.includes('sql');
+    const isSpeechQuestion = normalizedQuestionType.includes('speech');
     
     // Timer duration based on question type: Speech Based = 2 min, Coding/System Design = 15 min
     const questionTimeLimitSeconds = useMemo(() => {
-        if (normalizedQuestionType.includes('speech')) return 2 * 60; // 2 minutes
+        if (isSpeechQuestion) return 2 * 60; // 2 minutes
         if (isCodingQuestion || isSystemDesignQuestion) return 15 * 60; // 15 minutes
         return 2 * 60; // Default to 2 minutes for unknown types
-    }, [normalizedQuestionType, isCodingQuestion, isSystemDesignQuestion]);
+    }, [isSpeechQuestion, isCodingQuestion, isSystemDesignQuestion]);
+
+    const trimmedAnswer = useMemo(() => (
+        typeof answer === 'string' ? answer.trim() : ''
+    ), [answer]);
 
     const codingSupportedLanguages = useMemo(() => {
         if (!isCodingQuestion) {
@@ -279,34 +285,51 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         setSystemDesignError('');
         setIsSystemDesignModalOpen(false);
         // Reset timer for new question
-        setTimeRemaining(questionTimeLimitSeconds);
+        const hasTimer = typeof questionTimeLimitSeconds === 'number' && questionTimeLimitSeconds > 0;
+        if (hasTimer) {
+            timerDeadlineRef.current = Date.now() + questionTimeLimitSeconds * 1000;
+            setTimeRemaining(questionTimeLimitSeconds);
+        } else {
+            timerDeadlineRef.current = null;
+            setTimeRemaining(null);
+        }
         autoSubmitTriggeredRef.current = false;
     }, [isCodingQuestion, questionNumber, questionTimeLimitSeconds]);
 
     // Ref to hold submit function for auto-submit
     const handleSubmitAnswerRef = useRef(null);
     
-    // Timer effect - starts when questionNumber changes
+    // Timer effect - runs against deadline so tab switches don't pause countdown
     useEffect(() => {
-        // Don't run timer if complete
-        if (isComplete) return;
-        
-        const intervalId = setInterval(() => {
-            setTimeRemaining(prev => {
-                if (prev === null || prev <= 0) return prev;
-                const newTime = prev - 1;
-                
-                // Auto-submit when timer hits zero
-                if (newTime <= 0 && !autoSubmitTriggeredRef.current && handleSubmitAnswerRef.current) {
+        if (isComplete || !timerDeadlineRef.current) {
+            return undefined;
+        }
+
+        const updateRemaining = () => {
+            if (!timerDeadlineRef.current) return;
+            const msLeft = timerDeadlineRef.current - Date.now();
+            const secondsLeft = Math.max(0, Math.ceil(msLeft / 1000));
+
+            setTimeRemaining((prev) => (prev !== secondsLeft ? secondsLeft : prev));
+
+            if (secondsLeft <= 0) {
+                timerDeadlineRef.current = null;
+                if (!autoSubmitTriggeredRef.current && handleSubmitAnswerRef.current) {
                     autoSubmitTriggeredRef.current = true;
                     setTimeout(() => handleSubmitAnswerRef.current(true), 100);
                 }
-                
-                return newTime;
-            });
-        }, 1000);
-        
-        return () => clearInterval(intervalId);
+            }
+        };
+
+        updateRemaining();
+        timerRef.current = setInterval(updateRemaining, 1000);
+
+        return () => {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
+        };
     }, [questionNumber, isComplete]);
 
     useEffect(() => {
@@ -609,7 +632,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                 }
             }
 
-            if (!answer.trim() && !isSystemDesignQuestion) {
+            if (!trimmedAnswer && !isSystemDesignQuestion) {
                 setAnswerError('Answer cannot be empty');
                 if (answerInputRef.current) {
                     answerInputRef.current.focus({ preventScroll: true });
@@ -627,7 +650,10 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
         try {
             const formData = new FormData();
-            formData.append('answer', isSystemDesignQuestion && systemDesignDiagram ? systemDesignDiagram : answer);
+            const answerPayload = isSystemDesignQuestion && systemDesignDiagram
+                ? systemDesignDiagram
+                : trimmedAnswer;
+            formData.append('answer', answerPayload);
             if (question?.id != null) {
                 formData.append('question_id', String(question.id));
             }
@@ -1277,7 +1303,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                                             type="button"
                                             className="submit-answer-button"
                                             onClick={handleSubmitAnswer}
-                                            disabled={isLoading || isVideoUploading}
+                                            disabled={isLoading || isVideoUploading || !trimmedAnswer}
                                         >
                                             {isLoading || isVideoUploading ? 'Submitting…' : 'Submit answer'}
                                         </button>

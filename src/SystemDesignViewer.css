@@ -110,6 +110,11 @@
     border-radius: 8px;
 }
 
+/* Hide watermark attribution in final feedback */
+.system-design-viewer .react-flow__attribution {
+    display: none !important;
+}
+
 .system-design-viewer .react-flow__edge-text {
     font-size: 11px;
 }

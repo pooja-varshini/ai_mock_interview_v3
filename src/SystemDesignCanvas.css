@@ -19,6 +19,7 @@
     height: 100vh;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
 }
 
 .system-design-sidebar::-webkit-scrollbar {
@@ -27,8 +28,11 @@
 
 .system-design-sidebar h3 {
     margin-top: 0;
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     letter-spacing: 0.08em;
+    font-weight: 700;
+    font-family: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+    text-transform: uppercase;
 }
 
 .component-category {
@@ -42,8 +46,8 @@
     cursor: pointer;
     padding: 8px 0;
     font-weight: 600;
-    font-size: 0.9rem;
-    letter-spacing: 0.04em;
+    font-size: 0.92rem;
+    letter-spacing: 0.03em;
 }
 
 .component-list {
@@ -57,9 +61,11 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 10px;
+    padding: 6px 12px;
     border-radius: 999px;
-    font-size: 0.82rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.12);
     cursor: grab;
@@ -108,6 +114,32 @@
 .system-design-toolbar button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+/* ReactFlow controls spacing */
+.system-design-main .react-flow__controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 16px;
+    background: rgba(8, 6, 16, 0.85);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.system-design-main .react-flow__controls-button {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    margin: 0;
+    background: #f6f4ff;
+    color: #0a0814;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    border: none;
+}
+
+.system-design-main .react-flow__controls-button:hover {
+    transform: translateY(-1px);
 }
 
 .custom-node {
