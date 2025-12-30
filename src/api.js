@@ -3,33 +3,33 @@ import axios from 'axios';
 // Centralized Axios instances for different backends
 
 // export const interviewApi = axios.create({
-//   baseURL: 'https://mockinterview-backend.futurense.com',
+//   baseURL: 'http://localhost:8001',
 // });
-// export const interviewApi = axios.create({
-//   baseURL: 'https://mirella-predeficient-preoccupiedly.ngrok-free.dev',
-//   headers: { 'ngrok-skip-browser-warning': 'true' },
-// });
+// // export const interviewApi = axios.create({
+// //   baseURL: 'https://mirella-predeficient-preoccupiedly.ngrok-free.dev',
+// //   headers: { 'ngrok-skip-browser-warning': 'true' },
+// // });
 // export const adminApi = axios.create({
-//   baseURL: 'https://mockinterview-backend.futurense.com',
+//   baseURL: 'http://localhost:8001',
 // });
 
 // export const backendApi = axios.create({
-//   baseURL: 'https://mockinterview-backend.futurense.com',
+//   baseURL: 'http://localhost:8001',
 // });
 
 export const interviewApi = axios.create({
-  baseURL: 'http://localhost:8001',
+  baseURL: 'https://mockinterview-backend.futurense.com',
 });
 // export const interviewApi = axios.create({
 //   baseURL: 'https://mirella-predeficient-preoccupiedly.ngrok-free.dev',
 //   headers: { 'ngrok-skip-browser-warning': 'true' },
 // });
 export const adminApi = axios.create({
-  baseURL: 'http://localhost:8001',
+  baseURL: 'https://mockinterview-backend.futurense.com',
 });
 
 export const backendApi = axios.create({
-  baseURL: 'http://localhost:8001',
+  baseURL: 'https://mockinterview-backend.futurense.com',
 });
 
 // Piston is self-hosted behind the FastAPI backend; the frontend never talks
