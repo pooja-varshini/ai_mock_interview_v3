@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { FiBriefcase, FiHome, FiZap, FiAward } from 'react-icons/fi';
+import { FiBriefcase, FiHome, FiZap, FiAward, FiTrash2 } from 'react-icons/fi';
 import { interviewApi, fetchSessionRating, submitSessionRating, getFeedbackStatus, triggerFeedbackGeneration } from './api';
 import SessionCompleted from './SessionCompleted';
 import FeedbackScreen from './FeedbackScreen';
@@ -76,12 +76,9 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     // Essential state only
     const [question, setQuestion] = useState(() => normalizeQuestion(firstQuestion));
     const [questionNumber, setQuestionNumber] = useState(initialQuestionNumber || 1);
-    const [isAnswering, setIsAnswering] = useState(() => {
-        const normalizedFirst = normalizeQuestion(firstQuestion);
-        return normalizedFirst?.type === 'coding';
-    });
+    const [hasInterviewStarted, setHasInterviewStarted] = useState(false);
+    const [isAnswering, setIsAnswering] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
     const [isComplete, setIsComplete] = useState(false);
     const [isAnalyzingFinal, setIsAnalyzingFinal] = useState(false);
     const [answer, setAnswer] = useState('');
@@ -102,17 +99,27 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const [videoStatus, setVideoStatus] = useState('idle');
     const [videoReady, setVideoReady] = useState(false);
     const [videoError, setVideoError] = useState(null);
+    const [faceDetected, setFaceDetected] = useState(false);
     const [isVideoUploading, setIsVideoUploading] = useState(false);
-    const [floatingPanelPosition, setFloatingPanelPosition] = useState(null);
-    const floatingPanelDragRef = useRef(null);
-    const floatingPanelRef = useRef(null);
+    const [microphoneReady, setMicrophoneReady] = useState(false);
+    const [microphoneError, setMicrophoneError] = useState(null);
     const [isSystemDesignModalOpen, setIsSystemDesignModalOpen] = useState(false);
     const [systemDesignDiagram, setSystemDesignDiagram] = useState('');
     const [systemDesignError, setSystemDesignError] = useState('');
     const [timeRemaining, setTimeRemaining] = useState(null);
+    const [timerResetToken, setTimerResetToken] = useState(0);
+    const [hasTimeExpired, setHasTimeExpired] = useState(false);
     const timerRef = useRef(null);
     const timerDeadlineRef = useRef(null);
     const autoSubmitTriggeredRef = useRef(false);
+    const microphoneRequestRef = useRef(false);
+    const [recordingAttempts, setRecordingAttempts] = useState(0);
+    const [savedRecording, setSavedRecording] = useState(null);
+    const [isRecordingActive, setIsRecordingActive] = useState(false);
+    const MAX_RECORDING_ATTEMPTS = 3;
+    const recordingAttemptsRef = useRef(recordingAttempts);
+    const savedRecordingRef = useRef(savedRecording);
+    const savedTranscriptRef = useRef(null);
 
     const clearFeedbackPolling = useCallback(() => {
         if (pollingRef.current) {
@@ -182,8 +189,101 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
     // Refs for speech recognition and text area focus management
     const recognitionRef = useRef(null);
+    const stopSpeechRecognitionRef = useRef(null);
     const answerInputRef = useRef(null);
     const answerRef = useRef('');
+
+    const startSpeechRecognition = useCallback(() => {
+        console.log('Attempting to start speech recognition...');
+
+        if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+            alert('Browser does not support speech recognition.');
+            return;
+        }
+
+        try {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognitionRef.current = new SpeechRecognition();
+
+            // Basic settings
+            recognitionRef.current.continuous = true;
+            recognitionRef.current.interimResults = true;
+            recognitionRef.current.lang = 'en-US';
+            recognitionRef.current.manualStop = false; // Initialize the flag
+
+            const existingAnswer = answerRef.current || '';
+            let finalTranscript = existingAnswer;
+            console.log('Speech recognition configured');
+
+            recognitionRef.current.onresult = (event) => {
+                console.log('🎤 SPEECH DETECTED! Event:', event);
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    console.log(`Result ${i}: "${transcript}" (final: ${event.results[i].isFinal})`);
+
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                const fullText = (finalTranscript + interimTranscript).replace(/\s+/g, ' ').trimStart();
+                console.log('📝 Setting answer to:', fullText);
+                setAnswer(fullText);
+            };
+
+            recognitionRef.current.onstart = () => {
+                console.log('✅ Speech recognition STARTED successfully');
+            };
+
+            recognitionRef.current.onend = () => {
+                console.log('⏹️ Speech recognition ended');
+                // Use the ref to check if we should restart (avoids closure issues)
+                if (recognitionRef.current && !recognitionRef.current.manualStop) {
+                    console.log('🔄 Attempting to restart...');
+                    setTimeout(() => {
+                        try {
+                            if (recognitionRef.current && !recognitionRef.current.manualStop) {
+                                recognitionRef.current.start();
+                            }
+                        } catch (e) {
+                            console.error('❌ Error restarting:', e);
+                        }
+                    }, 100);
+                } else {
+                    console.log('🛑 Manual stop detected, not restarting');
+                }
+            };
+
+            recognitionRef.current.onerror = (event) => {
+                console.error('❌ Speech recognition error:', event.error);
+                if (event.error === 'not-allowed') {
+                    alert('Microphone access denied. Please allow microphone access and try again.');
+                }
+            };
+
+            // Start recognition
+            console.log('🚀 Starting speech recognition...');
+            finalTranscript = existingAnswer;
+            if (answerInputRef.current) {
+                answerInputRef.current.focus({ preventScroll: true });
+            }
+            recognitionRef.current.start();
+        } catch (error) {
+            console.error('❌ Failed to initialize speech recognition:', error);
+            alert('Failed to start speech recognition: ' + error.message);
+        }
+    }, []);
+
+    const stopSpeechRecognition = useCallback(() => {
+        if (recognitionRef.current) {
+            recognitionRef.current.manualStop = true; // Set a flag to prevent auto-restarting
+            recognitionRef.current.stop();
+        }
+    }, []);
 
     const isCodingQuestion = question?.type === 'coding';
     const isSystemDesignQuestion = (() => {
@@ -204,6 +304,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const normalizedQuestionType = typeof rawQuestionType === 'string' ? rawQuestionType.trim().toLowerCase() : '';
     const isSqlQuestion = isCodingQuestion && normalizedQuestionType.includes('sql');
     const isSpeechQuestion = normalizedQuestionType.includes('speech');
+    const requiresMicrophone = isSpeechQuestion;
     
     // Timer duration based on question type: Speech Based = 2 min, Coding/System Design = 15 min
     const questionTimeLimitSeconds = useMemo(() => {
@@ -262,20 +363,22 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         </div>
     );
     useEffect(() => {
-        setQuestion(normalizeQuestion(firstQuestion));
-        setQuestionNumber(initialQuestionNumber || 1);
+        const normalizedFirst = normalizeQuestion(firstQuestion);
+        setQuestion(normalizedFirst);
+        const startingNumber = initialQuestionNumber || 1;
+        setQuestionNumber(startingNumber);
         setMaxQuestions(initialMaxQuestions ?? null);
         setAnswerError('');
+        const started = startingNumber > 1;
+        setHasInterviewStarted(started);
+        setIsAnswering(started);
     }, [firstQuestion, initialQuestionNumber, initialMaxQuestions]);
 
     useEffect(() => {
         if (isCodingQuestion) {
             stopSpeechRecognition();
-            setIsAnswering(true);
             setAnswer('');
         } else {
-            setIsRecording(false);
-            setIsAnswering(questionNumber > 1);
             setAnswer('');
             setCodingSubmission(null);
             setIsAnalyzingFinal(false);
@@ -284,22 +387,42 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         setSystemDesignDiagram('');
         setSystemDesignError('');
         setIsSystemDesignModalOpen(false);
-        // Reset timer for new question
+        // Reset recording state for new question
+        setRecordingAttempts(0);
+        setSavedRecording(null);
+        setIsRecordingActive(false);
+        // Reset timer for new question (timer starts only when recording begins)
+        timerDeadlineRef.current = null;
         const hasTimer = typeof questionTimeLimitSeconds === 'number' && questionTimeLimitSeconds > 0;
-        if (hasTimer) {
-            timerDeadlineRef.current = Date.now() + questionTimeLimitSeconds * 1000;
-            setTimeRemaining(questionTimeLimitSeconds);
-        } else {
-            timerDeadlineRef.current = null;
-            setTimeRemaining(null);
-        }
+        setTimeRemaining(hasTimer ? questionTimeLimitSeconds : null);
         autoSubmitTriggeredRef.current = false;
-    }, [isCodingQuestion, questionNumber, questionTimeLimitSeconds]);
+        setHasTimeExpired(false);
+        setIsAnswering(hasInterviewStarted);
+    }, [isCodingQuestion, questionNumber, questionTimeLimitSeconds, hasInterviewStarted]);
 
-    // Ref to hold submit function for auto-submit
+    // Refs to hold handlers/state for timeouts
     const handleSubmitAnswerRef = useRef(null);
+    const handleStopRecordingRef = useRef(null);
     
     // Timer effect - runs against deadline so tab switches don't pause countdown
+    useEffect(() => {
+        recordingAttemptsRef.current = recordingAttempts;
+    }, [recordingAttempts]);
+
+    useEffect(() => {
+        savedRecordingRef.current = savedRecording;
+    }, [savedRecording]);
+
+    useEffect(() => {
+        if (!savedTranscriptRef.current) {
+            return;
+        }
+        const latest = savedRecording?.transcript || '';
+        if (savedTranscriptRef.current.innerText !== latest) {
+            savedTranscriptRef.current.innerText = latest;
+        }
+    }, [savedRecording]);
+
     useEffect(() => {
         if (isComplete || !timerDeadlineRef.current) {
             return undefined;
@@ -314,9 +437,31 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
             if (secondsLeft <= 0) {
                 timerDeadlineRef.current = null;
-                if (!autoSubmitTriggeredRef.current && handleSubmitAnswerRef.current) {
-                    autoSubmitTriggeredRef.current = true;
-                    setTimeout(() => handleSubmitAnswerRef.current(true), 100);
+                setHasTimeExpired(true);
+
+                const attemptCount = recordingAttemptsRef.current;
+                const isFinalAttempt = attemptCount >= MAX_RECORDING_ATTEMPTS;
+
+                let stopPromise = null;
+                if (isRecordingActive && handleStopRecordingRef.current) {
+                    stopPromise = handleStopRecordingRef.current();
+                }
+
+                if (isFinalAttempt && handleSubmitAnswerRef.current) {
+                    Promise.resolve(stopPromise)
+                        .then((recording) => recording || savedRecordingRef.current)
+                        .then((recordingToSubmit) => {
+                            if (!recordingToSubmit) {
+                                return;
+                            }
+                            if (!autoSubmitTriggeredRef.current) {
+                                autoSubmitTriggeredRef.current = true;
+                                handleSubmitAnswerRef.current(true, recordingToSubmit);
+                            }
+                        })
+                        .catch((error) => {
+                            console.error('Failed to auto-submit final attempt:', error);
+                        });
                 }
             }
         };
@@ -330,7 +475,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                 timerRef.current = null;
             }
         };
-    }, [questionNumber, isComplete]);
+    }, [questionNumber, isComplete, timerResetToken, isRecordingActive]);
 
     useEffect(() => {
         if (isAnswering && !isCodingQuestion && answerInputRef.current) {
@@ -351,8 +496,8 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     };
 
     const handleStartAnswering = () => {
-        if (isCodingQuestion) {
-            return;
+        if (!hasInterviewStarted) {
+            setHasInterviewStarted(true);
         }
         setIsAnswering(true);
         if (answerError) {
@@ -402,16 +547,121 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         }
     }, [feedbackStatus, existingRating.rating]);
 
-    const handleMicClick = () => {
-        if (isRecording) {
-            stopSpeechRecognition();
-        } else {
-            if (answerError) {
-                setAnswerError('');
-            }
-            startSpeechRecognition();
+    const stopVideoSegment = useCallback(async () => {
+        if (!videoRecorderRef.current) {
+            return null;
         }
-    };
+        try {
+            return await videoRecorderRef.current.stopAndGetBlob();
+        } catch (error) {
+            console.error('Failed to stop video recording:', error);
+            setVideoError(error);
+            return null;
+        }
+    }, []);
+
+    const startVideoSegment = useCallback(async () => {
+        if (!videoRecorderRef.current || !videoRecorderRef.current.isReady()) {
+            return;
+        }
+        if (videoRecorderRef.current.isRecording()) {
+            return;
+        }
+        try {
+            await videoRecorderRef.current.startNewSegment();
+        } catch (error) {
+            console.error('Failed to start video recording:', error);
+            setVideoError(error);
+        }
+    }, []);
+
+    const captureVideoClip = useCallback(async () => {
+        if (!videoReady || !videoRecorderRef.current) {
+            return null;
+        }
+        setIsVideoUploading(true);
+        try {
+            return await stopVideoSegment();
+        } finally {
+            setIsVideoUploading(false);
+        }
+    }, [stopVideoSegment, videoReady]);
+
+    const handleStartRecording = useCallback(async () => {
+        if (recordingAttempts >= MAX_RECORDING_ATTEMPTS || isLoading || isComplete) {
+            return;
+        }
+        
+        // Reset timer for this recording attempt
+        const hasTimer = typeof questionTimeLimitSeconds === 'number' && questionTimeLimitSeconds > 0;
+        if (hasTimer) {
+            timerDeadlineRef.current = Date.now() + questionTimeLimitSeconds * 1000;
+            setTimeRemaining(questionTimeLimitSeconds);
+            setTimerResetToken((token) => token + 1);
+        }
+        setHasTimeExpired(false);
+        autoSubmitTriggeredRef.current = false;
+        
+        // Clear any previous recording
+        setSavedRecording(null);
+        setAnswer('');
+        setAnswerError('');
+        
+        // Start video and speech recording
+        setIsRecordingActive(true);
+        setRecordingAttempts(prev => prev + 1);
+        await startVideoSegment();
+        startSpeechRecognition();
+    }, [
+        recordingAttempts,
+        MAX_RECORDING_ATTEMPTS,
+        isLoading,
+        isComplete,
+        questionTimeLimitSeconds,
+        startVideoSegment,
+        startSpeechRecognition,
+    ]);
+
+    const handleStopRecording = useCallback(async () => {
+        if (!isRecordingActive) {
+            return null;
+        }
+        
+        // Stop speech recognition
+        stopSpeechRecognition();
+        
+        // Capture video
+        const videoBlob = await captureVideoClip();
+        
+        // Save the recording
+        const recording = {
+            transcript: answer,
+            videoBlob: videoBlob,
+            timestamp: Date.now()
+        };
+        setSavedRecording(recording);
+        
+        setIsRecordingActive(false);
+        
+        // Stop timer
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+        timerDeadlineRef.current = null;
+        return recording;
+    }, [isRecordingActive, stopSpeechRecognition, captureVideoClip, answer]);
+
+    const handleDeleteRecording = useCallback(() => {
+        setSavedRecording(null);
+        setAnswer('');
+        setAnswerError('');
+    }, []);
+
+    const handleReRecord = useCallback(async () => {
+        handleDeleteRecording();
+        await handleStartRecording();
+    }, [handleDeleteRecording, handleStartRecording]);
 
     const handleRatingSubmit = async ({ rating, comments }) => {
         if (!sessionId || !interviewData?.studentEmail) {
@@ -476,103 +726,19 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         }
     };
 
-    const startSpeechRecognition = () => {
-        console.log('Attempting to start speech recognition...');
-        
-        if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
-            alert('Browser does not support speech recognition.');
-            return;
+    useEffect(() => {
+        stopSpeechRecognitionRef.current = stopSpeechRecognition;
+        return () => {
+            stopSpeechRecognitionRef.current = null;
+        };
+    }, [stopSpeechRecognition]);
+
+    // Auto-stop recording when timer expires
+    useEffect(() => {
+        if (hasTimeExpired && isRecordingActive) {
+            handleStopRecording();
         }
-
-        try {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognitionRef.current = new SpeechRecognition();
-            
-            // Basic settings
-            recognitionRef.current.continuous = true;
-            recognitionRef.current.interimResults = true;
-            recognitionRef.current.lang = 'en-US';
-            recognitionRef.current.manualStop = false; // Initialize the flag
-            
-            const existingAnswer = answerRef.current || '';
-            let finalTranscript = existingAnswer;
-            console.log('Speech recognition configured');
-
-            recognitionRef.current.onresult = (event) => {
-                console.log('🎤 SPEECH DETECTED! Event:', event);
-                let interimTranscript = '';
-                
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    const transcript = event.results[i][0].transcript;
-                    console.log(`Result ${i}: "${transcript}" (final: ${event.results[i].isFinal})`);
-                    
-                    if (event.results[i].isFinal) {
-                        finalTranscript += transcript + ' ';
-                    } else {
-                        interimTranscript += transcript;
-                    }
-                }
-                
-                const fullText = (finalTranscript + interimTranscript).replace(/\s+/g, ' ').trimStart();
-                console.log('📝 Setting answer to:', fullText);
-                setAnswer(fullText);
-            };
-
-            recognitionRef.current.onstart = () => {
-                console.log('✅ Speech recognition STARTED successfully');
-                setIsRecording(true);
-            };
-
-            recognitionRef.current.onend = () => {
-                console.log('⏹️ Speech recognition ended');
-                // Use the ref to check if we should restart (avoids closure issues)
-                if (recognitionRef.current && !recognitionRef.current.manualStop) {
-                    console.log('🔄 Attempting to restart...');
-                    setTimeout(() => {
-                        try {
-                            if (recognitionRef.current && !recognitionRef.current.manualStop) {
-                                recognitionRef.current.start();
-                            }
-                        } catch (e) {
-                            console.error('❌ Error restarting:', e);
-                            setIsRecording(false);
-                        }
-                    }, 100);
-                } else {
-                    console.log('🛑 Manual stop detected, not restarting');
-                    setIsRecording(false);
-                }
-            };
-
-            recognitionRef.current.onerror = (event) => {
-                console.error('❌ Speech recognition error:', event.error);
-                if (event.error === 'not-allowed') {
-                    alert('Microphone access denied. Please allow microphone access and try again.');
-                    setIsRecording(false);
-                }
-            };
-
-            // Start recognition
-            console.log('🚀 Starting speech recognition...');
-            finalTranscript = existingAnswer;
-            if (answerInputRef.current) {
-                answerInputRef.current.focus({ preventScroll: true });
-            }
-            recognitionRef.current.start();
-
-        } catch (error) {
-            console.error('❌ Failed to initialize speech recognition:', error);
-            alert('Failed to start speech recognition: ' + error.message);
-        }
-    };
-
-    const stopSpeechRecognition = () => {
-        if (recognitionRef.current) {
-            recognitionRef.current.manualStop = true; // Set a flag to prevent auto-restarting
-            recognitionRef.current.stop();
-            setIsRecording(false);
-        }
-    };
+    }, [hasTimeExpired, isRecordingActive, handleStopRecording]);
 
     const postAnswer = async (formData) => {
         const response = await interviewApi.post(`/interview/${sessionId}/answer`, formData);
@@ -622,7 +788,16 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         setIsAnalyzingFinal(false);
     };
 
-    const handleSubmitAnswer = async (isAutoSubmit = false) => {
+    const handleSubmitAnswer = async (isAutoSubmit = false, recordingOverride = null) => {
+        // For speech questions, validate saved recording exists
+        const effectiveRecording = recordingOverride || savedRecording;
+        if (isSpeechQuestion && !effectiveRecording) {
+            if (!isAutoSubmit) {
+                setAnswerError('Please record your answer before submitting.');
+            }
+            return;
+        }
+
         // For manual submit, validate answers
         if (!isAutoSubmit) {
             if (isSystemDesignQuestion) {
@@ -632,7 +807,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                 }
             }
 
-            if (!trimmedAnswer && !isSystemDesignQuestion) {
+            if (!trimmedAnswer && !isSystemDesignQuestion && !isSpeechQuestion) {
                 setAnswerError('Answer cannot be empty');
                 if (answerInputRef.current) {
                     answerInputRef.current.focus({ preventScroll: true });
@@ -642,17 +817,19 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         }
 
         setAnswerError('');
-        const isFinalQuestion = typeof maxQuestions === 'number' ? questionNumber >= maxQuestions : false;
-
+        const isCurrentQuestionFinal = isFinalQuestion;
         setIsLoading(true);
         stopSpeechRecognition();
         setIsAnalyzingFinal(isFinalQuestion);
 
         try {
             const formData = new FormData();
+            
+            // Use saved recording transcript for speech questions
             const answerPayload = isSystemDesignQuestion && systemDesignDiagram
                 ? systemDesignDiagram
-                : trimmedAnswer;
+                : (isSpeechQuestion && effectiveRecording ? effectiveRecording.transcript : trimmedAnswer);
+            
             formData.append('answer', answerPayload);
             if (question?.id != null) {
                 formData.append('question_id', String(question.id));
@@ -663,24 +840,23 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             if (isSystemDesignQuestion && systemDesignDiagram) {
                 formData.append('system_design_diagram', systemDesignDiagram);
             }
-            if (isFinalQuestion) {
+            if (isCurrentQuestionFinal) {
                 formData.append('is_final', 'true');
             }
-            // Only capture video for speech-based questions (not coding or system design)
-            if (shouldRecordVideo) {
-                const videoBlob = await captureVideoClip();
-                if (videoBlob) {
-                    const extension = videoBlob.type === 'video/mp4' ? 'mp4' : 'webm';
-                    formData.append('response_video', videoBlob, `session-${sessionId}-q${questionNumber}.${extension}`);
-                }
+            
+            // Use saved video blob for speech-based questions
+            if (isSpeechQuestion && effectiveRecording?.videoBlob) {
+                const extension = effectiveRecording.videoBlob.type === 'video/mp4' ? 'mp4' : 'webm';
+                formData.append('response_video', effectiveRecording.videoBlob, `session-${sessionId}-q${questionNumber}.${extension}`);
             }
+            
             await postAnswer(formData);
         } catch (error) {
             console.error('Error submitting answer:', error);
             const message = error?.response?.data?.detail && !/^\d{3}/.test(error.response.data.detail)
                 ? error.response.data.detail
                 : 'We couldn\'t generate your feedback right now. Please regenerate the report.';
-            if (isFinalQuestion) {
+            if (isCurrentQuestionFinal) {
                 setFeedbackError(message);
                 setFeedbackStatus('failed');
                 setIsComplete(true);
@@ -694,7 +870,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             }
         } finally {
             setIsLoading(false);
-            if (!isFinalQuestion) {
+            if (!isCurrentQuestionFinal) {
                 setIsAnalyzingFinal(false);
             }
         }
@@ -702,6 +878,13 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
     // Keep ref updated for auto-submit timer
     handleSubmitAnswerRef.current = handleSubmitAnswer;
+
+    useEffect(() => {
+        handleStopRecordingRef.current = handleStopRecording;
+        return () => {
+            handleStopRecordingRef.current = null;
+        };
+    }, [handleStopRecording]);
 
     const handleSubmitCoding = async (submission) => {
         setCodingSubmission(submission);
@@ -788,12 +971,16 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         ? "question-column question-column--split"
         : "question-column";
 
-    const shouldHideQuestionContent = !isCodingQuestion && questionNumber === 1 && !isAnswering;
+    const shouldHideQuestionContent = questionNumber === 1 && !isAnswering;
 
     const questionCardClasses = ["question-card"];
     if (isCodingQuestion) {
         questionCardClasses.push("question-card--coding");
     }
+
+    const isFinalQuestion = useMemo(() => {
+        return typeof maxQuestions === 'number' ? questionNumber >= maxQuestions : false;
+    }, [maxQuestions, questionNumber]);
 
     const renderQuestionText = (rawText) => {
         const sourceText = typeof rawText === 'string' && rawText.trim().length > 0
@@ -854,11 +1041,15 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         });
     };
 
-    // Only record video for Speech Based questions (not for coding or system design)
-    const shouldRecordVideo = useMemo(() => {
-        if (isCodingQuestion || isSystemDesignQuestion) return false;
-        return isAnswering;
-    }, [isCodingQuestion, isSystemDesignQuestion, isAnswering]);
+    // Show video panel for all speech-based questions (pre-interview or during answers)
+    const shouldShowVideoPanel = useMemo(() => {
+        if (isCodingQuestion || isSystemDesignQuestion) {
+            return false;
+        }
+        return true;
+    }, [isCodingQuestion, isSystemDesignQuestion]);
+
+    const hasRemainingRecordingAttempts = recordingAttempts < MAX_RECORDING_ATTEMPTS;
 
     const handleVideoReady = useCallback(() => {
         setVideoReady(true);
@@ -867,6 +1058,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
     const handleVideoError = useCallback((error) => {
         console.error('Camera error:', error);
+        setVideoReady(false);
         setVideoError(error);
     }, []);
 
@@ -874,80 +1066,142 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         setVideoStatus(status);
     }, []);
 
-    const stopVideoSegment = useCallback(async () => {
-        if (!videoRecorderRef.current) {
-            return null;
-        }
-        try {
-            return await videoRecorderRef.current.stopAndGetBlob();
-        } catch (error) {
-            console.error('Failed to stop video recording:', error);
-            setVideoError(error);
-            return null;
-        }
+    const handleFaceDetected = useCallback((detected) => {
+        setFaceDetected(detected);
     }, []);
 
-    const startVideoSegment = useCallback(async () => {
-        if (!videoRecorderRef.current || !videoRecorderRef.current.isReady()) {
-            return;
-        }
-        if (videoRecorderRef.current.isRecording()) {
-            return;
-        }
-        try {
-            await videoRecorderRef.current.startNewSegment();
-        } catch (error) {
-            console.error('Failed to start video recording:', error);
-            setVideoError(error);
-        }
-    }, []);
-
-    const captureVideoClip = useCallback(async () => {
-        if (!videoReady || !videoRecorderRef.current) {
-            return null;
-        }
-        setIsVideoUploading(true);
-        try {
-            return await stopVideoSegment();
-        } finally {
-            setIsVideoUploading(false);
-        }
-    }, [stopVideoSegment, videoReady]);
-
-    useEffect(() => {
-        if (!videoReady || !shouldRecordVideo || isComplete) {
-            return;
-        }
-
-        let didCancel = false;
-
-        const ensureRecording = async () => {
-            if (didCancel) {
-                return;
+    const handleTranscriptEdit = useCallback((event) => {
+        const newTranscript = event.currentTarget.innerText;
+        setSavedRecording((previous) => {
+            if (!previous) {
+                return previous;
             }
-            await startVideoSegment();
-        };
+            return {
+                ...previous,
+                transcript: newTranscript,
+            };
+        });
+        setAnswer(newTranscript);
+    }, []);
 
-        ensureRecording();
 
-        return () => {
-            didCancel = true;
-        };
-    }, [questionNumber, videoReady, shouldRecordVideo, startVideoSegment, isComplete]);
+    // Video recording is now manually controlled via handleStartRecording/handleStopRecording
 
-    useEffect(() => {
-        if (!isComplete) {
-            return;
-        }
-        stopVideoSegment();
-    }, [isComplete, stopVideoSegment]);
-
-    const handleStartAnsweringWithVideo = () => {
+    const handleStartInterview = () => {
         handleStartAnswering();
-        startVideoSegment();
     };
 
+    const requestMicrophoneAccess = useCallback(async () => {
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+            setMicrophoneReady(false);
+            setMicrophoneError(new Error('Microphone is not supported in this browser.'));
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach((track) => track.stop());
+            setMicrophoneReady(true);
+            setMicrophoneError(null);
+        } catch (error) {
+            console.error('Microphone permission error:', error);
+            setMicrophoneReady(false);
+            setMicrophoneError(error);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!requiresMicrophone) {
+            setMicrophoneReady(true);
+            setMicrophoneError(null);
+            microphoneRequestRef.current = false;
+            return;
+        }
+        if (microphoneRequestRef.current) {
+            // already attempted; allow manual retry via UI by clearing ref elsewhere if needed
+            return;
+        }
+        microphoneRequestRef.current = true;
+        requestMicrophoneAccess();
+    }, [requiresMicrophone, requestMicrophoneAccess, questionNumber]);
+
+    useEffect(() => {
+        if (!requiresMicrophone) {
+            return;
+        }
+        if (typeof navigator === 'undefined' || !navigator.permissions?.query) {
+            return;
+        }
+
+        let isActive = true;
+        let cleanupListener = null;
+
+        const syncFromPermissionState = (state) => {
+            if (!isActive) {
+                return;
+            }
+            if (state === 'granted') {
+                setMicrophoneReady(true);
+                setMicrophoneError(null);
+            } else {
+                setMicrophoneReady(false);
+                setMicrophoneError(new Error('Microphone access is required to begin.'));
+            }
+        };
+
+        navigator.permissions
+            .query({ name: 'microphone' })
+            .then((status) => {
+                if (!isActive) {
+                    return;
+                }
+
+                const handlePermissionChange = () => syncFromPermissionState(status.state);
+                syncFromPermissionState(status.state);
+
+                if (typeof status.addEventListener === 'function') {
+                    status.addEventListener('change', handlePermissionChange);
+                    cleanupListener = () => status.removeEventListener('change', handlePermissionChange);
+                } else if ('onchange' in status) {
+                    status.onchange = handlePermissionChange;
+                    cleanupListener = () => {
+                        if ('onchange' in status) {
+                            status.onchange = null;
+                        }
+                    };
+                }
+            })
+            .catch(() => {
+                // Permissions API not supported for microphone; rely on direct getUserMedia request.
+            });
+
+    return () => {
+            isActive = false;
+            if (typeof cleanupListener === 'function') {
+                cleanupListener();
+            }
+        };
+    }, [requiresMicrophone]);
+
+    const missingDevices = useMemo(() => {
+        const missing = [];
+        if (!videoReady || videoError) {
+            missing.push('camera');
+        }
+        if (requiresMicrophone && (!microphoneReady || microphoneError)) {
+            missing.push('microphone');
+        }
+        return missing;
+    }, [videoReady, videoError, requiresMicrophone, microphoneReady, microphoneError]);
+
     const showAnalyzingOverlay = isAnalyzingFinal && !isComplete;
+    const canStartInterview = videoReady && microphoneReady && faceDetected;
+    const deviceWarning = !videoReady
+        ? 'Please allow camera access to continue'
+        : !microphoneReady
+            ? 'Please allow microphone access to continue'
+            : !faceDetected
+                ? 'Please position your face in the camera view'
+                : '';
 
     const videoStatusLabel = (() => {
         switch (videoStatus) {
@@ -964,113 +1218,12 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         }
     })();
 
-    const isPreInterview = questionNumber === 1 && !isAnswering;
+    const isPreInterview = questionNumber === 1 && !hasInterviewStarted;
 
-    const clampFloatingPanelPosition = useCallback((desiredX, desiredY, panelSize) => {
-        const panelWidth = panelSize?.width ?? floatingPanelRef.current?.offsetWidth ?? 0;
-        const panelHeight = panelSize?.height ?? floatingPanelRef.current?.offsetHeight ?? 0;
-        if (!panelWidth || !panelHeight) {
-            return { x: desiredX, y: desiredY };
-        }
-
-        const MIN_VISIBLE_EDGE = 36;
-        const viewportWidth = window.innerWidth || 0;
-        const viewportHeight = window.innerHeight || 0;
-
-        const minX = MIN_VISIBLE_EDGE - panelWidth;
-        const maxX = Math.max(minX, viewportWidth - MIN_VISIBLE_EDGE);
-        const minY = MIN_VISIBLE_EDGE - panelHeight;
-        const maxY = Math.max(minY, viewportHeight - MIN_VISIBLE_EDGE);
-
-        const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-
-        return {
-            x: clamp(desiredX, minX, maxX),
-            y: clamp(desiredY, minY, maxY),
-        };
-    }, []);
-
-    const handleFloatingPanelPointerMove = useCallback((event) => {
-        const dragState = floatingPanelDragRef.current;
-        if (!dragState) {
-            return;
-        }
-
-        const desiredX = event.clientX - dragState.offsetX;
-        const desiredY = event.clientY - dragState.offsetY;
-        setFloatingPanelPosition(clampFloatingPanelPosition(desiredX, desiredY, dragState));
-    }, [clampFloatingPanelPosition]);
-
-    const handleFloatingPanelPointerUp = useCallback(() => {
-        floatingPanelDragRef.current = null;
-        window.removeEventListener('pointermove', handleFloatingPanelPointerMove);
-        window.removeEventListener('pointerup', handleFloatingPanelPointerUp);
-    }, [handleFloatingPanelPointerMove]);
-
-    const handleFloatingPanelPointerDown = useCallback((event) => {
-        if (isPreInterview) {
-            return;
-        }
-
-        if (event.button !== undefined && event.button !== 0) {
-            return;
-        }
-
-        const panelRect = floatingPanelRef.current?.getBoundingClientRect();
-        if (!panelRect) {
-            return;
-        }
-
-        event.preventDefault();
-        floatingPanelDragRef.current = {
-            offsetX: event.clientX - panelRect.left,
-            offsetY: event.clientY - panelRect.top,
-            width: panelRect.width,
-            height: panelRect.height,
-        };
-
-        window.addEventListener('pointermove', handleFloatingPanelPointerMove);
-        window.addEventListener('pointerup', handleFloatingPanelPointerUp);
-    }, [handleFloatingPanelPointerMove, handleFloatingPanelPointerUp, isPreInterview]);
-
-    useEffect(() => () => {
-        window.removeEventListener('pointermove', handleFloatingPanelPointerMove);
-        window.removeEventListener('pointerup', handleFloatingPanelPointerUp);
-    }, [handleFloatingPanelPointerMove, handleFloatingPanelPointerUp]);
-
-    useEffect(() => {
-        if (isPreInterview) {
-            setFloatingPanelPosition(null);
-            return;
-        }
-
-        const panelRect = floatingPanelRef.current?.getBoundingClientRect();
-        if (!panelRect) {
-            return;
-        }
-
-        setFloatingPanelPosition((current) => {
-            if (current) {
-                return clampFloatingPanelPosition(current.x, current.y, panelRect);
-            }
-
-            const defaultX = window.innerWidth - panelRect.width - 32;
-            const defaultY = window.innerHeight - panelRect.height - 32;
-            return clampFloatingPanelPosition(defaultX, defaultY, panelRect);
-        });
-    }, [clampFloatingPanelPosition, isPreInterview]);
-
-    const videoPanelClasses = ['video-panel', isPreInterview ? 'video-panel--start' : 'video-panel--floating'];
-
-    const floatingPanelStyle = !isPreInterview && floatingPanelPosition
-        ? {
-            left: `${floatingPanelPosition.x}px`,
-            top: `${floatingPanelPosition.y}px`,
-            right: 'auto',
-            bottom: 'auto',
-            cursor: floatingPanelDragRef.current ? 'grabbing' : 'grab',
-        }
-        : undefined;
+    const videoPanelClasses = ['video-panel', 'video-panel--floating'];
+    if (isPreInterview) {
+        videoPanelClasses.push('video-panel--start');
+    }
 
     const ratingModal = (
         <SessionRatingModal
@@ -1176,14 +1329,11 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                     )}
                 </div>
 
-                {/* Only show video panel for speech-based questions or during pre-interview */}
-                {(isPreInterview || shouldRecordVideo) && (
+                {/* Show video panel for speech-based questions or during pre-interview */}
+                {(isPreInterview || shouldShowVideoPanel) && (
                     <div
                         className={videoPanelClasses.join(' ')}
                         aria-live="polite"
-                        style={!isPreInterview ? floatingPanelStyle : undefined}
-                        onPointerDown={handleFloatingPanelPointerDown}
-                        ref={!isPreInterview ? floatingPanelRef : undefined}
                     >
                         {isPreInterview && (
                             <div className="video-panel__header video-panel__header--compact">
@@ -1197,6 +1347,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                             onReady={handleVideoReady}
                             onError={handleVideoError}
                             onStatusChange={handleVideoStatusChange}
+                            onFaceDetected={handleFaceDetected}
                             muted
                             showStatusText={false}
                         />
@@ -1209,6 +1360,20 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                     </div>
                 )}
 
+                {isPreInterview ? (
+                    <div className="start-interview-stage">
+                        <button
+                            className="start-answering-button"
+                            onClick={handleStartInterview}
+                            disabled={!canStartInterview}
+                        >
+                            Start Interview
+                        </button>
+                        {!canStartInterview && (
+                            <p className="camera-warning">{deviceWarning}</p>
+                        )}
+                    </div>
+                ) : (
                 <div className={columnsClass}>
                     <div className={questionColumnClass}>
                         {!shouldHideQuestionContent && (
@@ -1242,77 +1407,144 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                             />
                         </div>
                     ) : isSystemDesignQuestion ? (
-                        questionNumber === 1 && !isAnswering ? (
-                            <button className="start-answering-button" onClick={handleStartAnsweringWithVideo}>
-                                Start Interview
-                            </button>
-                        ) : (
-                            <div className="system-design-answer-card system-design-answer-card--compact">
-                                <div className="system-design-answer-card__actions">
-                                    <button type="button" onClick={() => setIsSystemDesignModalOpen(true)}>
-                                        Open Design Canvas
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="system-design-submit-btn"
-                                        onClick={handleSubmitAnswer}
-                                        disabled={!hasValidDiagram || isLoading}
-                                    >
-                                        {isLoading ? 'Submitting...' : 'Submit Design'}
-                                    </button>
-                                </div>
-                                {systemDesignError && (
-                                    <p className="system-design-error" role="alert">{systemDesignError}</p>
-                                )}
+                        <div className="system-design-answer-card system-design-answer-card--compact">
+                            <div className="system-design-answer-card__actions">
+                                <button type="button" onClick={() => setIsSystemDesignModalOpen(true)}>
+                                    Open Design Canvas
+                                </button>
+                                <button
+                                    type="button"
+                                    className="system-design-submit-btn"
+                                    onClick={handleSubmitAnswer}
+                                    disabled={!hasValidDiagram || isLoading}
+                                >
+                                    {isLoading ? 'Submitting...' : 'Submit Design'}
+                                </button>
                             </div>
-                        )
+                            {systemDesignError && (
+                                <p className="system-design-error" role="alert">{systemDesignError}</p>
+                            )}
+                        </div>
                     ) : (
                         <div className="answering-container">
-                            {questionNumber === 1 && !isAnswering ? (
-                                <button className="start-answering-button" onClick={handleStartAnsweringWithVideo}>
-                                    Start Interview
-                                </button>
-                            ) : (
-                                <>
-                                    <div className="answer-header">Your answer </div>
-                                    <textarea
-                                        className="answer-textarea"
-                                        value={answer}
-                                        onChange={(event) => {
-                                            setAnswer(event.target.value);
-                                            if (answerError) {
-                                                setAnswerError('');
-                                            }
-                                        }}
-                                        aria-invalid={answerError ? 'true' : 'false'}
-                                        placeholder="Type your answer here"
-                                        ref={answerInputRef}
-                                    />
-                                    {answerError && (
-                                        <p className="answer-error" role="alert">{answerError}</p>
-                                    )}
-                                    <div className="answer-controls">
+                            <div className="recording-status-header">
+                                <span className="recording-attempts-badge">
+                                    Attempt {recordingAttempts} of {MAX_RECORDING_ATTEMPTS}
+                                </span>
+                                {timeRemaining !== null && (
+                                    <span className="recording-timer">
+                                        {formatTime(timeRemaining)}
+                                    </span>
+                                )}
+                            </div>
+
+                            {!savedRecording && !isRecordingActive && (
+                                <div className="recording-prompt">
+                                    <p className="recording-prompt-text">
+                                        Click "Start Recording" to record your answer with video and audio.
+                                    </p>
+                                </div>
+                            )}
+
+                            {isRecordingActive && (
+                                <div className="recording-active-indicator">
+                                    <div className="recording-status-chip">
+                                        <div className="recording-pulse"></div>
+                                        <span className="recording-status-text">Recording</span>
+                                    </div>
+                                    <div className="answer-preview">
+                                        <div className="answer-preview-content">
+                                            {answer || 'Speak to see your transcript here...'}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {savedRecording && !isRecordingActive && (
+                                <div className="saved-recording-preview">
+                                    <div className="saved-recording-header">
+                                        <span className="saved-recording-label">✓ Recording Saved</span>
                                         <button
                                             type="button"
-                                            className={`mic-button ${isRecording ? 'listening' : ''}`}
-                                            onClick={handleMicClick}
+                                            className="delete-recording-button"
+                                            onClick={handleDeleteRecording}
+                                            title="Delete recording"
+                                            disabled={!hasRemainingRecordingAttempts}
                                         >
-                                            {isRecording ? 'Stop recording' : 'Start recording'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="submit-answer-button"
-                                            onClick={handleSubmitAnswer}
-                                            disabled={isLoading || isVideoUploading || !trimmedAnswer}
-                                        >
-                                            {isLoading || isVideoUploading ? 'Submitting…' : 'Submit answer'}
+                                            <FiTrash2 aria-hidden="true" />
                                         </button>
                                     </div>
-                                </>
+                                    <div
+                                        className="saved-recording-transcript"
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        role="textbox"
+                                        aria-label="Edit transcript before submitting"
+                                        data-placeholder="No transcript available"
+                                        ref={savedTranscriptRef}
+                                        onInput={handleTranscriptEdit}
+                                    />
+                                </div>
+                            )}
+
+                            {answerError && (
+                                <p className="answer-error" role="alert">{answerError}</p>
+                            )}
+
+                            <div className="recording-controls">
+                                {!isRecordingActive && !savedRecording && (
+                                    <button
+                                        type="button"
+                                        className="start-recording-button"
+                                        onClick={handleStartRecording}
+                                        disabled={recordingAttempts >= MAX_RECORDING_ATTEMPTS || isLoading || !faceDetected}
+                                    >
+                                        {recordingAttempts === 0 ? 'Start Recording' : 'Start Recording'}
+                                    </button>
+                                )}
+
+                                {isRecordingActive && (
+                                    <button
+                                        type="button"
+                                        className="stop-recording-button"
+                                        onClick={handleStopRecording}
+                                    >
+                                        Stop Recording
+                                    </button>
+                                )}
+
+                                {savedRecording && !isRecordingActive && recordingAttempts < MAX_RECORDING_ATTEMPTS && (
+                                    <button
+                                        type="button"
+                                        className="re-record-button"
+                                        onClick={handleReRecord}
+                                        disabled={isLoading || !faceDetected}
+                                    >
+                                        Re-record
+                                    </button>
+                                )}
+
+                                {savedRecording && (
+                                    <button
+                                        type="button"
+                                        className="submit-answer-button"
+                                        onClick={handleSubmitAnswer}
+                                        disabled={isLoading || isVideoUploading}
+                                    >
+                                        {isLoading || isVideoUploading ? 'Submitting…' : 'Submit Answer'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {recordingAttempts >= MAX_RECORDING_ATTEMPTS && !savedRecording && (
+                                <p className="recording-limit-warning">
+                                    You've used all {MAX_RECORDING_ATTEMPTS} recording attempts. Please submit your last recording.
+                                </p>
                             )}
                         </div>
                     )}
                 </div>
+                )}
             </div>
             {isSystemDesignModalOpen && (
                 <div className="system-design-modal-overlay system-design-modal-overlay--full">

@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision';
 
 const SUPPORTED_MIME_TYPES = [
   'video/webm;codecs=vp9',
@@ -32,6 +33,7 @@ const VideoRecorder = forwardRef(function VideoRecorder(
     onReady,
     onError,
     onStatusChange,
+    onFaceDetected,
     facingMode = 'user',
     muted = true,
     showStatusText = true,
@@ -45,6 +47,10 @@ const VideoRecorder = forwardRef(function VideoRecorder(
   const stopPromiseRef = useRef(null);
   const [status, setStatus] = useState('idle');
   const [permissionError, setPermissionError] = useState(null);
+  const permissionCheckIntervalRef = useRef(null);
+  const faceDetectorRef = useRef(null);
+  const faceDetectionIntervalRef = useRef(null);
+  const [faceDetected, setFaceDetected] = useState(false);
 
   const updateStatus = useCallback(
     (next) => {
@@ -55,6 +61,41 @@ const VideoRecorder = forwardRef(function VideoRecorder(
     },
     [onStatusChange],
   );
+
+  // Initialize face detector
+  useEffect(() => {
+    let cancelled = false;
+
+    const initFaceDetector = async () => {
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm'
+        );
+        const detector = await FaceDetector.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+        });
+        if (!cancelled) {
+          faceDetectorRef.current = detector;
+        }
+      } catch (error) {
+        console.error('Failed to initialize face detector:', error);
+      }
+    };
+
+    initFaceDetector();
+
+    return () => {
+      cancelled = true;
+      if (faceDetectorRef.current) {
+        faceDetectorRef.current.close();
+        faceDetectorRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,9 +132,12 @@ const VideoRecorder = forwardRef(function VideoRecorder(
           videoRef.current.srcObject = stream;
         }
         updateStatus('ready');
+        setPermissionError(null);
         if (typeof onReady === 'function') {
           onReady();
         }
+        // Start face detection once camera is ready
+        startFaceDetection();
       } catch (error) {
         setPermissionError(error);
         updateStatus('error');
@@ -114,8 +158,89 @@ const VideoRecorder = forwardRef(function VideoRecorder(
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
+      stopFaceDetection();
     };
   }, [facingMode, onReady, onError, updateStatus]);
+
+  const startFaceDetection = useCallback(() => {
+    if (faceDetectionIntervalRef.current) {
+      return;
+    }
+
+    const detectFace = () => {
+      if (!faceDetectorRef.current || !videoRef.current || videoRef.current.readyState < 2) {
+        return;
+      }
+
+      try {
+        const detections = faceDetectorRef.current.detectForVideo(videoRef.current, performance.now());
+        const hasFace = detections.detections && detections.detections.length > 0;
+        
+        setFaceDetected(hasFace);
+        if (typeof onFaceDetected === 'function') {
+          onFaceDetected(hasFace);
+        }
+      } catch (error) {
+        console.error('Face detection error:', error);
+      }
+    };
+
+    // Run face detection every 500ms
+    faceDetectionIntervalRef.current = setInterval(detectFace, 500);
+  }, [onFaceDetected]);
+
+  const stopFaceDetection = useCallback(() => {
+    if (faceDetectionIntervalRef.current) {
+      clearInterval(faceDetectionIntervalRef.current);
+      faceDetectionIntervalRef.current = null;
+    }
+    setFaceDetected(false);
+  }, []);
+
+  // Monitor camera track state to detect permission changes
+  useEffect(() => {
+    if (!streamRef.current) {
+      return;
+    }
+
+    const checkTrackState = () => {
+      if (!streamRef.current) {
+        return;
+      }
+
+      const videoTracks = streamRef.current.getVideoTracks();
+      if (videoTracks.length === 0) {
+        return;
+      }
+
+      const track = videoTracks[0];
+      if (track.readyState === 'ended' || !track.enabled) {
+        // Camera was disabled or permission revoked
+        setPermissionError(new Error('Camera access was revoked'));
+        updateStatus('error');
+        if (typeof onError === 'function') {
+          onError(new Error('Camera access was revoked'));
+        }
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        }
+      }
+    };
+
+    // Check immediately
+    checkTrackState();
+
+    // Set up interval to monitor track state
+    permissionCheckIntervalRef.current = setInterval(checkTrackState, 1000);
+
+    return () => {
+      if (permissionCheckIntervalRef.current) {
+        clearInterval(permissionCheckIntervalRef.current);
+        permissionCheckIntervalRef.current = null;
+      }
+    };
+  }, [status, onError, updateStatus]);
 
   const stopRecorderAndCollect = useCallback(async () => {
     if (!recorderRef.current) {
@@ -218,7 +343,11 @@ const VideoRecorder = forwardRef(function VideoRecorder(
 
   let statusLabel = 'Initializing camera…';
   if (status === 'ready') {
-    statusLabel = 'Camera ready';
+    if (faceDetected) {
+      statusLabel = 'Face detected - Ready to start';
+    } else {
+      statusLabel = 'Position your face in the camera';
+    }
   } else if (status === 'recording') {
     statusLabel = 'Recording in progress';
   } else if (status === 'error') {

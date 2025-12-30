@@ -19,16 +19,34 @@ import {
     setAdminAuthToken,
 } from './api';
 
+const ACTIVE_INTERVIEW_STORAGE_KEY = 'activeInterview';
+
 function App() {
     const navigate = useNavigate();
     const location = useLocation();
     const [student, setStudent] = useState(null);
     const [isHydrated, setIsHydrated] = useState(false);
     const [interviewData, setInterviewData] = useState(null);
+    const [interviewHydrated, setInterviewHydrated] = useState(false);
     const [showInstructions, setShowInstructions] = useState(false);
     const [dashboardRefresh, setDashboardRefresh] = useState(0);
     const [adminSession, setAdminSession] = useState(null);
     const [adminLoading, setAdminLoading] = useState(true);
+
+    const persistActiveInterview = useCallback((data, showIntro = false) => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        if (data) {
+            const payload = {
+                data,
+                showInstructions: !!showIntro,
+            };
+            sessionStorage.setItem(ACTIVE_INTERVIEW_STORAGE_KEY, JSON.stringify(payload));
+        } else {
+            sessionStorage.removeItem(ACTIVE_INTERVIEW_STORAGE_KEY);
+        }
+    }, []);
 
     useEffect(() => {
         const loggedInStudent = localStorage.getItem('student');
@@ -41,6 +59,45 @@ function App() {
         }
         setIsHydrated(true);
     }, []);
+
+    useEffect(() => {
+        if (!isHydrated) {
+            return;
+        }
+
+        if (!student) {
+            setInterviewHydrated(true);
+            return;
+        }
+
+        if (interviewData) {
+            setInterviewHydrated(true);
+            return;
+        }
+
+        let hydrated = false;
+        try {
+            const stored = sessionStorage.getItem(ACTIVE_INTERVIEW_STORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed?.data) {
+                    setInterviewData(parsed.data);
+                    setShowInstructions(!!parsed.showInstructions);
+                    hydrated = true;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to hydrate interview session', error);
+            sessionStorage.removeItem(ACTIVE_INTERVIEW_STORAGE_KEY);
+        } finally {
+            if (!hydrated) {
+                setInterviewHydrated(true);
+            } else {
+                // defer mark true until state set occurs on next render cycle
+                setTimeout(() => setInterviewHydrated(true), 0);
+            }
+        }
+    }, [isHydrated, interviewData, student]);
 
     useEffect(() => {
         if (!isHydrated) {
@@ -86,6 +143,17 @@ function App() {
         hydrateAdminProfile();
     }, [hydrateAdminProfile, isHydrated]);
 
+    useEffect(() => {
+        if (!isHydrated) {
+            return;
+        }
+        if (interviewData) {
+            persistActiveInterview(interviewData, showInstructions);
+        } else {
+            persistActiveInterview(null);
+        }
+    }, [interviewData, showInstructions, persistActiveInterview, isHydrated]);
+
     const handleLogin = (studentData) => {
         localStorage.setItem('student', JSON.stringify(studentData));
         setStudent(studentData);
@@ -98,6 +166,7 @@ function App() {
         setStudent(null);
         setInterviewData(null);
         setShowInstructions(false);
+        persistActiveInterview(null);
         navigate('/login', { replace: true });
         addToast('You have been logged out.', 'info');
     };
@@ -164,6 +233,7 @@ function App() {
 
     const handleInterviewEnd = (sessionId) => {
         setInterviewData(null);
+        persistActiveInterview(null);
         navigate('/dashboard', { replace: true }); // Replace interview route in history
         addToast("Interview completed! Returning to your dashboard.", 'success');
         setDashboardRefresh((prev) => prev + 1);
@@ -248,14 +318,16 @@ function App() {
                 <Route
                     path="/interview"
                     element={
-                        student && interviewData ? (
-                            <InterviewScreen
-                                interviewData={interviewData}
-                                onInterviewEnd={handleInterviewEnd}
-                                addToast={addToast}
-                            />
-                        ) : (
-                            <Navigate to={student ? '/dashboard' : '/login'} replace />
+                        !interviewHydrated ? null : (
+                            student && interviewData ? (
+                                <InterviewScreen
+                                    interviewData={interviewData}
+                                    onInterviewEnd={handleInterviewEnd}
+                                    addToast={addToast}
+                                />
+                            ) : (
+                                <Navigate to={student ? '/dashboard' : '/login'} replace />
+                            )
                         )
                     }
                 />

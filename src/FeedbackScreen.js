@@ -492,13 +492,13 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                 const rawScore = item.score != null ? Math.min(Math.max(Number(item.score), 0), 5) : null;
                                 const scoreTone = rawScore == null ? 'neutral' : rawScore >= 3.5 ? 'great' : rawScore >= 2 ? 'average' : 'low';
                                 const scoreLabel = rawScore != null ? `Score: ${formatScoreDisplay(rawScore)}/5` : 'Score: —';
-                                const answerText = item.original_answer || item.answer;
+                                const answerRaw = item.original_answer || item.answer;
                                 const questionTypeValue = (item.question_type || '').toLowerCase();
                                 const isCoding = Boolean(item.is_coding) || questionTypeValue === 'coding' || questionTypeValue.startsWith('coding ');
                                 // Detect system design from question_type OR from answer containing diagram JSON
                                 const candidateDiagram = (() => {
                                     try {
-                                        const parsed = typeof answerText === 'string' ? JSON.parse(answerText) : answerText;
+                                        const parsed = typeof answerRaw === 'string' ? JSON.parse(answerRaw) : answerRaw;
                                         if (parsed?.nodes) {
                                             console.log('[FeedbackScreen] Candidate diagram parsed:', { nodes: parsed.nodes?.length, edges: parsed.edges?.length, raw: parsed });
                                         }
@@ -509,6 +509,14 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                     }
                                 })();
                                 const isSystemDesign = questionTypeValue.includes('system') && questionTypeValue.includes('design') || candidateDiagram !== null;
+                                const safeAnswerText = (() => {
+                                    if (answerRaw == null) {
+                                        return '';
+                                    }
+                                    return typeof answerRaw === 'string'
+                                        ? answerRaw
+                                        : JSON.stringify(answerRaw, null, 2);
+                                })();
                                 // Parse better_example as diagram JSON for system design questions
                                 const suggestedDiagram = isSystemDesign ? (() => {
                                     try {
@@ -529,6 +537,14 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                     : questionTypeValue.includes('python')
                                     ? 'Python'
                                     : '';
+                                const safeBetterExample = (() => {
+                                    if (item.better_example == null) {
+                                        return '';
+                                    }
+                                    return typeof item.better_example === 'string'
+                                        ? item.better_example
+                                        : JSON.stringify(item.better_example, null, 2);
+                                })();
                                 return (
                                     <div
                                         className={`accordion-item tone-${tone} ${isOpen ? 'expanded' : ''}`}
@@ -590,7 +606,7 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                ) : answerText && !isSystemDesign ? (
+                                                ) : safeAnswerText && !isSystemDesign ? (
                                                     <div className={`detail-block ${isCoding ? 'detail-block--code' : ''}`}>
                                                         <h4>
                                                             Your answer
@@ -607,18 +623,18 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                                                             title: 'Your answer',
                                                                             language: codeLanguage,
                                                                             questionNumber,
-                                                                            code: answerText || '',
+                                                                            code: safeAnswerText,
                                                                         })
                                                                     }
                                                                 >
                                                                     ⤢
                                                                 </button>
                                                                 <pre className="code-block" aria-label="Your code answer">
-                                                                    <code>{answerText}</code>
+                                                                    <code>{safeAnswerText}</code>
                                                                 </pre>
                                                             </div>
                                                         ) : (
-                                                            <p>{answerText}</p>
+                                                            <p>{safeAnswerText}</p>
                                                         )}
                                                     </div>
                                                 ) : null}
@@ -658,7 +674,7 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                                         </div>
                                                     </div>
                                                 ) : null}
-                                                {item.better_example && !suggestedDiagram ? (
+                                                {safeBetterExample && !suggestedDiagram ? (
                                                     <div className={`detail-block ${isCoding ? 'detail-block--code' : ''}`}>
                                                         <h4>
                                                             Suggested answer
@@ -675,18 +691,18 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                                                                             title: 'Suggested answer',
                                                                             language: codeLanguage,
                                                                             questionNumber,
-                                                                            code: item.better_example || '',
+                                                                            code: safeBetterExample,
                                                                         })
                                                                     }
                                                                 >
                                                                     ⤢
                                                                 </button>
                                                                 <pre className="code-block" aria-label="Suggested code answer">
-                                                                    <code>{item.better_example}</code>
+                                                                    <code>{safeBetterExample}</code>
                                                                 </pre>
                                                             </div>
                                                         ) : (
-                                                            <p>{item.better_example}</p>
+                                                            <p>{safeBetterExample}</p>
                                                         )}
                                                     </div>
                                                 ) : null}

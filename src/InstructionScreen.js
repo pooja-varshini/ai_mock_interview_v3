@@ -13,8 +13,10 @@ const instructions = [
     icon: interviewFormatLogo,
     points: [
       'The AI interviewer will ask you one question at a time, similar to how a human interviewer would.',
-      'You can respond in full sentences - either by speaking your answer aloud (after enabling voice input) or by typing your response in the chat.',
-      'After answering, you’ll have the option to re-record or edit your response if you feel it wasn’t up to the mark. Once you’re satisfied and submit your response, you’ll be redirected to the next question automatically.',
+      'Speak your answer out loud, and you’ll see the live transcript as you talk.',
+      'After answering, you’ll have the option to re-record or edit your response if you feel it wasn’t up to the mark.',
+      'Once you’re satisfied and submit your response, you’ll be redirected to the next question automatically.',
+      'You only have three attempts for each response, so use them wisely.',
     ],
   },
   {
@@ -28,19 +30,19 @@ const instructions = [
         subPoints: [
           {
             heading: 'Question wise analysis',
-            description: 'Scores each answer with strengths, gaps, and improvement guidance.'
+            description: 'Scores each answer with strengths, gaps, and improvement guidance along with suggested answers.'
           },
           {
-            heading: 'Technical Summary',
-            description: 'Evaluates skills, strengths, gaps, and gives learning steps with mandatory skill scores.'
+            heading: 'Video-based analysis',
+            description: 'Video cues are evaluated for each question as part of the question-wise analysis. You’ll get insights on confidence, clarity, expressions, and any signs of nervousness for every answer you give.'
           },
           {
-            heading: 'Communication Summary',
-            description: 'Assesses clarity, tone, structure, identifies communication gaps, and suggests improvements under STAR method.'
+            heading: 'Overall interview feedback',
+            description: 'You’ll receive detailed feedback aligned with the interview type highlighting what you did well and what to work on.'
           },
           {
-            heading: 'Attitude Summary',
-            description: 'Reviews behavior, confidence, adaptability, notes weaknesses, and provides actionable next steps.'
+            heading: 'Skill-wise scoring',
+            description: 'You get personalized scores for each skill required for the specific role you’re preparing for.'
           }
         ]
       }
@@ -65,9 +67,9 @@ const instructions = [
         text: 'Once the interview is complete, you’ll receive personalized feedback based on:',
         type: 'sub-list-trigger',
         subPoints: [
-          'Each question and your corresponding response',
-          'Technical, communication, and attitude summaries',
-          'Skill-wise scores and suggested next steps',
+          'Each question and your corresponding response alongside the AI suggested answers.',
+          'Core competency breakdown based on predefined rubrics tailored to the interview type.',
+          'Personalized scoring for each relevant skill.',
         ],
       },
       { text: 'The feedback will be structured and actionable, so you can focus on specific areas of improvement.', type: 'bullet' },
@@ -78,7 +80,7 @@ const instructions = [
     icon: importantGuidelinesLogo,
     points: [
       'Be honest and authentic — don’t copy responses from the internet.',
-      'The AI records your text answers to analyze and generate feedback; no personal data is shared externally.',
+      'The AI records your answers to analyze and generate feedback; no personal data is shared externally.',
       'Ensure a quiet environment and a stable internet connection for best results.',
     ],
   },

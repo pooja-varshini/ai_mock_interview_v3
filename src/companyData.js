@@ -16,6 +16,7 @@ import amazonLogo from './assets/logos/amazon.png';
 import flipkartLogo from './assets/logos/flipkart.jpg';
 import spotifyLogo from './assets/logos/spotify.png';
 
+
 export const trendingCompanies = [
     { name: 'Google', logo: googleLogo },
     { name: 'Meta', logo: metaLogo },
