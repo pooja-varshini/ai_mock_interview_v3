@@ -103,6 +103,9 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const [isVideoUploading, setIsVideoUploading] = useState(false);
     const [microphoneReady, setMicrophoneReady] = useState(false);
     const [microphoneError, setMicrophoneError] = useState(null);
+    const [floatingPanelPosition, setFloatingPanelPosition] = useState(null);
+    const floatingPanelDragRef = useRef(null);
+    const floatingPanelRef = useRef(null);
     const [isSystemDesignModalOpen, setIsSystemDesignModalOpen] = useState(false);
     const [systemDesignDiagram, setSystemDesignDiagram] = useState('');
     const [systemDesignError, setSystemDesignError] = useState('');
@@ -1220,10 +1223,114 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
 
     const isPreInterview = questionNumber === 1 && !hasInterviewStarted;
 
+    const clampFloatingPanelPosition = useCallback((desiredX, desiredY, panelSize) => {
+        const panelWidth = panelSize?.width ?? floatingPanelRef.current?.offsetWidth ?? 0;
+        const panelHeight = panelSize?.height ?? floatingPanelRef.current?.offsetHeight ?? 0;
+        if (!panelWidth || !panelHeight) {
+            return { x: desiredX, y: desiredY };
+        }
+
+        const MIN_VISIBLE_EDGE = 36;
+        const viewportWidth = window.innerWidth || 0;
+        const viewportHeight = window.innerHeight || 0;
+
+        const minX = MIN_VISIBLE_EDGE - panelWidth;
+        const maxX = Math.max(minX, viewportWidth - MIN_VISIBLE_EDGE);
+        const minY = MIN_VISIBLE_EDGE - panelHeight;
+        const maxY = Math.max(minY, viewportHeight - MIN_VISIBLE_EDGE);
+
+        const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+        return {
+            x: clamp(desiredX, minX, maxX),
+            y: clamp(desiredY, minY, maxY),
+        };
+    }, []);
+
+    const handleFloatingPanelPointerMove = useCallback((event) => {
+        const dragState = floatingPanelDragRef.current;
+        if (!dragState) {
+            return;
+        }
+
+        const desiredX = event.clientX - dragState.offsetX;
+        const desiredY = event.clientY - dragState.offsetY;
+        setFloatingPanelPosition(clampFloatingPanelPosition(desiredX, desiredY, dragState));
+    }, [clampFloatingPanelPosition]);
+
+    const handleFloatingPanelPointerUp = useCallback(() => {
+        floatingPanelDragRef.current = null;
+        window.removeEventListener('pointermove', handleFloatingPanelPointerMove);
+        window.removeEventListener('pointerup', handleFloatingPanelPointerUp);
+    }, [handleFloatingPanelPointerMove]);
+
+    const handleFloatingPanelPointerDown = useCallback((event) => {
+        if (isPreInterview) {
+            return;
+        }
+
+        if (event.button !== undefined && event.button !== 0) {
+            return;
+        }
+
+        const panelRect = floatingPanelRef.current?.getBoundingClientRect();
+        if (!panelRect) {
+            return;
+        }
+
+        event.preventDefault();
+        floatingPanelDragRef.current = {
+            offsetX: event.clientX - panelRect.left,
+            offsetY: event.clientY - panelRect.top,
+            width: panelRect.width,
+            height: panelRect.height,
+        };
+
+        window.addEventListener('pointermove', handleFloatingPanelPointerMove);
+        window.addEventListener('pointerup', handleFloatingPanelPointerUp);
+    }, [handleFloatingPanelPointerMove, handleFloatingPanelPointerUp, isPreInterview]);
+
+    useEffect(() => () => {
+        window.removeEventListener('pointermove', handleFloatingPanelPointerMove);
+        window.removeEventListener('pointerup', handleFloatingPanelPointerUp);
+    }, [handleFloatingPanelPointerMove, handleFloatingPanelPointerUp]);
+
+    useEffect(() => {
+        if (isPreInterview) {
+            setFloatingPanelPosition(null);
+            return;
+        }
+
+        const panelRect = floatingPanelRef.current?.getBoundingClientRect();
+        if (!panelRect) {
+            return;
+        }
+
+        setFloatingPanelPosition((current) => {
+            if (current) {
+                return clampFloatingPanelPosition(current.x, current.y, panelRect);
+            }
+
+            const defaultX = window.innerWidth - panelRect.width - 32;
+            const defaultY = window.innerHeight - panelRect.height - 32;
+            return clampFloatingPanelPosition(defaultX, defaultY, panelRect);
+        });
+    }, [clampFloatingPanelPosition, isPreInterview]);
+
     const videoPanelClasses = ['video-panel', 'video-panel--floating'];
     if (isPreInterview) {
         videoPanelClasses.push('video-panel--start');
     }
+
+    const floatingPanelStyle = !isPreInterview && floatingPanelPosition
+        ? {
+            left: `${floatingPanelPosition.x}px`,
+            top: `${floatingPanelPosition.y}px`,
+            right: 'auto',
+            bottom: 'auto',
+            cursor: floatingPanelDragRef.current ? 'grabbing' : 'grab',
+        }
+        : undefined;
 
     const ratingModal = (
         <SessionRatingModal
@@ -1334,6 +1441,9 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                     <div
                         className={videoPanelClasses.join(' ')}
                         aria-live="polite"
+                        style={!isPreInterview ? floatingPanelStyle : undefined}
+                        onPointerDown={handleFloatingPanelPointerDown}
+                        ref={!isPreInterview ? floatingPanelRef : undefined}
                     >
                         {isPreInterview && (
                             <div className="video-panel__header video-panel__header--compact">
