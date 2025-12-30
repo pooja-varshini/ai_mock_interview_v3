@@ -377,6 +377,16 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         setIsAnswering(started);
     }, [firstQuestion, initialQuestionNumber, initialMaxQuestions]);
 
+    const ensureQuestionTimerRunning = useCallback(() => {
+        const hasTimer = typeof questionTimeLimitSeconds === 'number' && questionTimeLimitSeconds > 0;
+        if (!hasTimer || timerDeadlineRef.current) {
+            return;
+        }
+        timerDeadlineRef.current = Date.now() + questionTimeLimitSeconds * 1000;
+        setTimeRemaining(questionTimeLimitSeconds);
+        setTimerResetToken((token) => token + 1);
+    }, [questionTimeLimitSeconds]);
+
     useEffect(() => {
         if (isCodingQuestion) {
             stopSpeechRecognition();
@@ -498,11 +508,20 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
+    useEffect(() => {
+        if (!isSpeechQuestion && isAnswering) {
+            ensureQuestionTimerRunning();
+        }
+    }, [isSpeechQuestion, isAnswering, ensureQuestionTimerRunning]);
+
     const handleStartAnswering = () => {
         if (!hasInterviewStarted) {
             setHasInterviewStarted(true);
         }
         setIsAnswering(true);
+        if (!isSpeechQuestion) {
+            ensureQuestionTimerRunning();
+        }
         if (answerError) {
             setAnswerError('');
         }
