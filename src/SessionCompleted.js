@@ -1,7 +1,7 @@
 import React from 'react';
 import './SessionCompleted.css';
 
-export default function SessionCompleted({ onGetFeedback, status, errorMessage, onRetry, canViewFeedback }) {
+export default function SessionCompleted({ onGetFeedback, status, errorMessage, onRetry, canViewFeedback, isNoAnsweredQuestions }) {
     const normalizedStatus = status || 'not_requested';
     const isPending = normalizedStatus === 'pending' || normalizedStatus === 'processing';
     const isFailed = normalizedStatus === 'failed';
@@ -18,7 +18,7 @@ export default function SessionCompleted({ onGetFeedback, status, errorMessage, 
                         <p className="session-completed-status-text">Finalizing your results… please wait.</p>
                     </div>
                 ) : null}
-                {isFailed && errorMessage ? (
+                {isFailed && errorMessage && !isNoAnsweredQuestions ? (
                     <div className="session-completed-error" role="alert">
                         <p>{errorMessage}</p>
                         {onRetry ? (
@@ -26,6 +26,11 @@ export default function SessionCompleted({ onGetFeedback, status, errorMessage, 
                                 Regenerate Feedback
                             </button>
                         ) : null}
+                    </div>
+                ) : null}
+                {isNoAnsweredQuestions ? (
+                    <div className="session-completed-error" role="alert">
+                        <p>{errorMessage || 'No answered questions found for this session'}</p>
                     </div>
                 ) : null}
                 <button onClick={onGetFeedback} className="feedback-button" disabled={isPending || !canViewFeedback}>
