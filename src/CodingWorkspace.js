@@ -228,7 +228,7 @@ export default function CodingWorkspace({
   initialCode = DEFAULT_CODE,
   supportedLanguages,
   defaultLanguage,
-  theme = 'vs-dark',
+  theme = 'vs-light',
   runShortcut = 'Ctrl+Enter',
   onRunShortcut,
   editorHeight = '420px',
