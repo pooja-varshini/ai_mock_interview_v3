@@ -647,6 +647,12 @@
     color: rgba(214, 209, 251, 0.75);
 }
 
+.video-panel__warning {
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+    color: #fbbf24;
+}
+
 .video-panel__error {
     margin: 0;
     font-size: 0.85rem;
@@ -1956,6 +1962,14 @@ color: #cbc8e8;
     min-height: 60px;
     max-height: 200px;
     overflow-y: auto;
+}
+
+.recording-audio-warning {
+    margin: 12px 0 0;
+    font-size: 13px;
+    color: #fbbf24;
+    background: transparent;
+    border: none;
 }
 
 .saved-recording-preview {
