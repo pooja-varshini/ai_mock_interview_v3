@@ -544,26 +544,31 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                 const attemptCount = recordingAttemptsRef.current;
                 const isFinalAttempt = attemptCount >= MAX_RECORDING_ATTEMPTS;
 
-                let stopPromise = null;
-                if (isRecordingActive && handleStopRecordingRef.current) {
-                    stopPromise = handleStopRecordingRef.current();
-                }
+                if (isSpeechQuestion) {
+                    let stopPromise = null;
+                    if (isRecordingActive && handleStopRecordingRef.current) {
+                        stopPromise = handleStopRecordingRef.current();
+                    }
 
-                if (isFinalAttempt && handleSubmitAnswerRef.current) {
-                    Promise.resolve(stopPromise)
-                        .then((recording) => recording || savedRecordingRef.current)
-                        .then((recordingToSubmit) => {
-                            if (!recordingToSubmit) {
-                                return;
-                            }
-                            if (!autoSubmitTriggeredRef.current) {
-                                autoSubmitTriggeredRef.current = true;
-                                handleSubmitAnswerRef.current(true, recordingToSubmit);
-                            }
-                        })
-                        .catch((error) => {
-                            console.error('Failed to auto-submit final attempt:', error);
-                        });
+                    if (isFinalAttempt && handleSubmitAnswerRef.current) {
+                        Promise.resolve(stopPromise)
+                            .then((recording) => recording || savedRecordingRef.current)
+                            .then((recordingToSubmit) => {
+                                if (!recordingToSubmit) {
+                                    return;
+                                }
+                                if (!autoSubmitTriggeredRef.current) {
+                                    autoSubmitTriggeredRef.current = true;
+                                    handleSubmitAnswerRef.current(true, recordingToSubmit);
+                                }
+                            })
+                            .catch((error) => {
+                                console.error('Failed to auto-submit final attempt:', error);
+                            });
+                    }
+                } else if (handleSubmitAnswerRef.current && !autoSubmitTriggeredRef.current) {
+                    autoSubmitTriggeredRef.current = true;
+                    handleSubmitAnswerRef.current(true);
                 }
             }
         };
@@ -577,7 +582,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                 timerRef.current = null;
             }
         };
-    }, [questionNumber, isComplete, timerResetToken, isRecordingActive]);
+    }, [questionNumber, isComplete, timerResetToken, isRecordingActive, isSpeechQuestion]);
 
     useEffect(() => {
         if (isAnswering && !isCodingQuestion && answerInputRef.current) {
