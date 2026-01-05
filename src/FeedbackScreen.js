@@ -25,6 +25,7 @@ const classifyScore = (score) => {
 };
 
 const FRIENDLY_FEEDBACK_ERROR = "We couldn't generate your feedback right now. Please regenerate the report.";
+const NO_ANSWERED_QUESTIONS_MESSAGE = 'No answered questions found for this session';
 
 const parseFeedback = (payload) => {
     if (!payload) return { structured: null, raw: null };
@@ -181,6 +182,7 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
     const [feedback, setFeedback] = useState({ structured: null, raw: null });
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [noAnsweredQuestions, setNoAnsweredQuestions] = useState(false);
     const [openQuestions, setOpenQuestions] = useState(() => new Set([0]));
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [feedbackStatus, setFeedbackStatus] = useState('pending');
@@ -219,6 +221,7 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
                     if (isStillGenerating) {
                         setFeedbackStatus('pending');
                         setError(null);
+                        setNoAnsweredQuestions(false);
                         if (!skipLoading) {
                             setIsLoading(true);
                         }
@@ -229,12 +232,21 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
 
                 setFeedback(parsed);
                 setError(null);
+                setNoAnsweredQuestions(false);
                 setFeedbackStatus('completed');
                 return true;
             } catch (err) {
                 console.error('Error fetching feedback:', err);
                 setFeedback({ structured: null, raw: null });
-                setError(FRIENDLY_FEEDBACK_ERROR);
+                const detail =
+                    err?.response?.data?.detail ||
+                    err?.response?.data?.error ||
+                    err?.message ||
+                    '';
+                const normalizedDetail = typeof detail === 'string' ? detail.toLowerCase() : '';
+                const isNoAnswers = normalizedDetail.includes('no answered questions found');
+                setNoAnsweredQuestions(isNoAnswers);
+                setError(isNoAnswers ? NO_ANSWERED_QUESTIONS_MESSAGE : FRIENDLY_FEEDBACK_ERROR);
                 setFeedbackStatus('failed');
                 return false;
             } finally {
@@ -259,23 +271,31 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
             if (status === 'completed') {
                 clearStatusPolling();
                 setError(null);
+                setNoAnsweredQuestions(false);
                 const fetched = await fetchFeedback({ skipLoading: true });
                 if (!fetched) {
                     beginStatusPolling();
                 }
             } else if (status === 'failed') {
                 clearStatusPolling();
-                setError(statusError || FRIENDLY_FEEDBACK_ERROR);
+                const normalizedDetail = typeof (statusError || '') === 'string'
+                    ? statusError.toLowerCase()
+                    : '';
+                const isNoAnswers = normalizedDetail.includes('no answered questions found');
+                setNoAnsweredQuestions(isNoAnswers);
+                setError(isNoAnswers ? NO_ANSWERED_QUESTIONS_MESSAGE : (statusError || FRIENDLY_FEEDBACK_ERROR));
                 setFeedback({ structured: null, raw: null });
                 setIsLoading(false);
             } else {
                 setError(null);
+                setNoAnsweredQuestions(false);
                 setIsLoading(true);
             }
         } catch (err) {
             console.error('Failed to check feedback status:', err);
             clearStatusPolling();
             setFeedbackStatus('failed');
+            setNoAnsweredQuestions(false);
             setError('We could not verify the feedback status. Please regenerate the report.');
             setFeedback({ structured: null, raw: null });
             setIsLoading(false);
@@ -413,11 +433,13 @@ export default function FeedbackScreen({ sessionId, preloadedFeedback }) {
     if (error) {
         return (
             <div className="feedback-screen error">
-                <h2>Oops! Something went wrong.</h2>
+                <h2>{noAnsweredQuestions ? 'No Answers Yet' : 'Oops! Something went wrong.'}</h2>
                 <p>{error}</p>
-                <button type="button" onClick={handleRegenerate} disabled={isRegenerating}>
-                    {isRegenerating ? 'Regenerating…' : 'Regenerate Feedback'}
-                </button>
+                {!noAnsweredQuestions && (
+                    <button type="button" onClick={handleRegenerate} disabled={isRegenerating}>
+                        {isRegenerating ? 'Regenerating…' : 'Regenerate Feedback'}
+                    </button>
+                )}
             </div>
         );
     }
