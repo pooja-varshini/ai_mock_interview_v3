@@ -459,11 +459,11 @@ body {
 }
 
 .rubric-bar-score--high {
-    color: #34d399;
+    color: #86efac;
 }
 
 .rubric-bar-score--medium {
-    color: #fbbf24;
+    color: #fde68a;
 }
 
 .rubric-bar-score--low {
@@ -489,11 +489,11 @@ body {
 }
 
 .rubric-bar-fill--high {
-    background: linear-gradient(90deg, #34d399, #10b981);
+    background: linear-gradient(90deg, #86efac, #4ade80);
 }
 
 .rubric-bar-fill--medium {
-    background: linear-gradient(90deg, #fbbf24, #f97316);
+    background: linear-gradient(90deg, #fde68a, #fcd34d);
 }
 
 .rubric-bar-fill--low {
