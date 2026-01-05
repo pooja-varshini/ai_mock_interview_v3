@@ -34,6 +34,7 @@ const VideoRecorder = forwardRef(function VideoRecorder(
     onError,
     onStatusChange,
     onFaceDetected,
+    onAudioTrackStatusChange,
     facingMode = 'user',
     muted = true,
     showStatusText = true,
@@ -51,6 +52,8 @@ const VideoRecorder = forwardRef(function VideoRecorder(
   const faceDetectorRef = useRef(null);
   const faceDetectionIntervalRef = useRef(null);
   const [faceDetected, setFaceDetected] = useState(false);
+  const [audioTrackStatus, setAudioTrackStatus] = useState('active');
+  const audioTrackCheckIntervalRef = useRef(null);
 
   const updateStatus = useCallback(
     (next) => {
@@ -138,6 +141,8 @@ const VideoRecorder = forwardRef(function VideoRecorder(
         }
         // Start face detection once camera is ready
         startFaceDetection();
+        // Start audio track monitoring
+        startAudioTrackMonitoring();
       } catch (error) {
         setPermissionError(error);
         updateStatus('error');
@@ -159,6 +164,7 @@ const VideoRecorder = forwardRef(function VideoRecorder(
         streamRef.current = null;
       }
       stopFaceDetection();
+      stopAudioTrackMonitoring();
     };
   }, [facingMode, onReady, onError, updateStatus]);
 
@@ -195,6 +201,53 @@ const VideoRecorder = forwardRef(function VideoRecorder(
       faceDetectionIntervalRef.current = null;
     }
     setFaceDetected(false);
+  }, []);
+
+  const startAudioTrackMonitoring = useCallback(() => {
+    if (audioTrackCheckIntervalRef.current) {
+      return;
+    }
+
+    const checkAudioStatus = () => {
+      if (!streamRef.current) {
+        return;
+      }
+
+      const audioTracks = streamRef.current.getAudioTracks();
+      if (audioTracks.length === 0) {
+        const newStatus = 'ended';
+        setAudioTrackStatus(newStatus);
+        if (typeof onAudioTrackStatusChange === 'function') {
+          onAudioTrackStatusChange(newStatus);
+        }
+        return;
+      }
+
+      const track = audioTracks[0];
+      let newStatus = 'active';
+      
+      if (track.readyState === 'ended') {
+        newStatus = 'ended';
+      } else if (track.muted || !track.enabled) {
+        newStatus = 'muted';
+      }
+
+      setAudioTrackStatus(newStatus);
+      if (typeof onAudioTrackStatusChange === 'function') {
+        onAudioTrackStatusChange(newStatus);
+      }
+    };
+
+    checkAudioStatus();
+    audioTrackCheckIntervalRef.current = setInterval(checkAudioStatus, 500);
+  }, [onAudioTrackStatusChange]);
+
+  const stopAudioTrackMonitoring = useCallback(() => {
+    if (audioTrackCheckIntervalRef.current) {
+      clearInterval(audioTrackCheckIntervalRef.current);
+      audioTrackCheckIntervalRef.current = null;
+    }
+    setAudioTrackStatus('active');
   }, []);
 
   // Monitor camera track state to detect permission changes
