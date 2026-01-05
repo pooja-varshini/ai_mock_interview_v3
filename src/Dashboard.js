@@ -69,6 +69,110 @@ const formatScoreDisplay = (value, decimals = 2, emptyLabel = 'N/A') => {
   return rounded.toFixed(decimals);
 };
 
+const RubricBreakdown = ({ rubricData, sessionId }) => {
+  const [expanded, setExpanded] = React.useState(false);
+
+  if (!rubricData || !rubricData.rubric || !Array.isArray(rubricData.rubric)) {
+    return null;
+  }
+
+  const rubricItems = rubricData.rubric.filter(Boolean);
+  if (rubricItems.length === 0) {
+    return null;
+  }
+
+  const scoreLevel = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 'neutral';
+    if (numeric >= 4) return 'high';
+    if (numeric >= 2.5) return 'medium';
+    return 'low';
+  };
+
+  const percent = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.min(100, Math.max(0, (numeric / 5) * 100));
+  };
+
+  const topOne = rubricItems.slice(0, 1);
+  const remaining = rubricItems.slice(1);
+
+  const detailsId = `${sessionId}-rubric-details`;
+
+  return (
+    <div className="rubric-breakdown-compact">
+      <div className="rubric-top-items">
+        {topOne.map((item, idx) => {
+          const level = scoreLevel(item.score);
+          return (
+            <div key={`${sessionId}-rubric-${idx}`} className="rubric-bar-item">
+              <div className="rubric-bar-header">
+                <span className="rubric-bar-name" title={item.name || `Rubric ${idx + 1}`}>
+                  {item.name || `Rubric ${idx + 1}`}
+                </span>
+                <span className={`rubric-bar-score rubric-bar-score--${level}`}>
+                  {formatScoreDisplay(item.score, 1, '—')}/5
+                </span>
+              </div>
+              <div className="rubric-bar-track">
+                <div
+                  className={`rubric-bar-fill rubric-bar-fill--${level}`}
+                  style={{ width: `${percent(item.score)}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {remaining.length > 0 && (
+        <div className="rubric-expand-section">
+          <div
+            id={detailsId}
+            className={`rubric-expanded-items${expanded ? ' is-visible' : ''}`}
+            aria-hidden={!expanded}
+          >
+            {remaining.map((item, idx) => {
+              const level = scoreLevel(item.score);
+              return (
+                <div key={`${sessionId}-rubric-extra-${idx}`} className="rubric-bar-item">
+                  <div className="rubric-bar-header">
+                    <span className="rubric-bar-name" title={item.name || `Rubric ${idx + 3}`}>
+                      {item.name || `Rubric ${idx + 3}`}
+                    </span>
+                    <span className={`rubric-bar-score rubric-bar-score--${level}`}>
+                      {formatScoreDisplay(item.score, 1, '—')}/5
+                    </span>
+                  </div>
+                  <div className="rubric-bar-track">
+                    <div
+                      className={`rubric-bar-fill rubric-bar-fill--${level}`}
+                      style={{ width: `${percent(item.score)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            className="rubric-expand-toggle"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            aria-controls={detailsId}
+            title={expanded ? 'Hide all rubric details' : 'View the full rubric breakdown'}
+          >
+            <span className="rubric-expand-icon" aria-hidden="true">
+              {expanded ? '▾' : '▸'}
+            </span>
+            <span>{expanded ? 'Hide details' : `View all (${rubricItems.length})`}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const formatISTDateTime = (value) => {
   if (!value) return 'N/A';
   try {
@@ -932,6 +1036,7 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
               <div>Work Experience</div>
               <div>Date & Time</div>
               <div>Score</div>
+              <div>Rubric Breakdown</div>
               <div>Status</div>
               <div>Actions</div>
             </div>
@@ -964,6 +1069,13 @@ export default function Dashboard({ student, onLogout, onInterviewStart, addToas
                     <div>{formatISTDateTime(session.completed_at || session.started_at)}</div>
                     <div className={getScoreClass(session.overall_score)}>
                       {formatScoreDisplay(session.overall_score)}
+                    </div>
+                    <div className="rubric-cell">
+                      {session.rubric_scores ? (
+                        <RubricBreakdown rubricData={session.rubric_scores} sessionId={session.session_id} />
+                      ) : (
+                        <span className="rubric-empty">—</span>
+                      )}
                     </div>
                     <div className={getStatusClass(session.status)}>
                       {formatStatus(session.status)}
