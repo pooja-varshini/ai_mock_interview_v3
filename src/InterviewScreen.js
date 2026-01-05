@@ -93,6 +93,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const [ratingLoaded, setRatingLoaded] = useState(false);
     const [feedbackStatus, setFeedbackStatus] = useState('not_requested');
     const [feedbackError, setFeedbackError] = useState(null);
+    const [isNoAnsweredQuestions, setIsNoAnsweredQuestions] = useState(false);
     const pollingRef = useRef(null);
     const toastTimerRef = useRef(null);
     const videoRecorderRef = useRef(null);
@@ -123,6 +124,9 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const recordingAttemptsRef = useRef(recordingAttempts);
     const savedRecordingRef = useRef(savedRecording);
     const savedTranscriptRef = useRef(null);
+    const [audioTrackStatus, setAudioTrackStatus] = useState('active'); // 'active', 'muted', 'ended'
+    const audioStreamRef = useRef(null);
+    const audioMonitorIntervalRef = useRef(null);
 
     const clearFeedbackPolling = useCallback(() => {
         if (pollingRef.current) {
@@ -144,9 +148,11 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             const { status, error } = data;
             const normalizedStatus = status || 'pending';
             const normalizedError = error || null;
+            const isNoAnswers = typeof normalizedError === 'string' && normalizedError.toLowerCase().includes('no answered questions found');
 
             setFeedbackStatus(normalizedStatus);
             setFeedbackError(normalizedError);
+            setIsNoAnsweredQuestions(isNoAnswers);
 
             if (normalizedStatus === 'completed') {
                 clearFeedbackPolling();
@@ -159,14 +165,18 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                 setIsComplete(true);
                 setCanViewFeedback(true);
                 if (!normalizedError) {
-                    setFeedbackError('We hit a snag while preparing your report. Please try regenerating.');
+                    const fallbackError = 'We hit a snag while preparing your report. Please try regenerating.';
+                setFeedbackError(fallbackError);
+                setIsNoAnsweredQuestions(fallbackError.toLowerCase().includes('no answered questions found'));
                 }
             }
         } catch (err) {
             console.error('Failed to fetch feedback status', err);
             clearFeedbackPolling();
             setFeedbackStatus('failed');
-            setFeedbackError('We could not verify the feedback status. Please regenerate the report.');
+            const statusError = 'We could not verify the feedback status. Please regenerate the report.';
+            setFeedbackError(statusError);
+            setIsNoAnsweredQuestions(statusError.toLowerCase().includes('no answered questions found'));
             setIsAnalyzingFinal(false);
             setIsComplete(true);
             setCanViewFeedback(true);
@@ -176,6 +186,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
     const beginFeedbackPolling = useCallback(() => {
         setFeedbackStatus('pending');
         setFeedbackError(null);
+        setIsNoAnsweredQuestions(false);
         setIsAnalyzingFinal(true);
         setIsComplete(true);
         setCanViewFeedback(false);
@@ -303,18 +314,96 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             return false;
         }
     }, [systemDesignDiagram]);
+    const extractDifficulty = useCallback(() => {
+        const raw = question?.raw;
+        const candidates = [
+            raw?.difficulty,
+            raw?.difficulty_level,
+            raw?.level,
+            question?.difficulty,
+        ];
+        const value = candidates.find((entry) => entry != null);
+        if (!value) {
+            return 'medium';
+        }
+        const normalized = value.toString().trim().toLowerCase();
+        if (normalized === 'difficult') {
+            return 'hard';
+        }
+        if (['easy', 'medium', 'hard'].includes(normalized)) {
+            return normalized;
+        }
+        return 'medium';
+    }, [question]);
+
     const rawQuestionType = question?.raw?.question_type ?? question?.type ?? '';
     const normalizedQuestionType = typeof rawQuestionType === 'string' ? rawQuestionType.trim().toLowerCase() : '';
     const isSqlQuestion = isCodingQuestion && normalizedQuestionType.includes('sql');
     const isSpeechQuestion = normalizedQuestionType.includes('speech');
     const requiresMicrophone = isSpeechQuestion;
+    const normalizedDifficulty = useMemo(() => extractDifficulty(), [extractDifficulty]);
     
-    // Timer duration based on question type: Speech Based = 2 min, Coding/System Design = 15 min
+    const startAudioMonitoring = useCallback(() => {
+        if (!requiresMicrophone || audioMonitorIntervalRef.current) {
+            return;
+        }
+
+        const checkAudioStatus = () => {
+            if (!audioStreamRef.current) {
+                setAudioTrackStatus('ended');
+                return;
+            }
+
+            const audioTracks = audioStreamRef.current.getAudioTracks();
+            if (audioTracks.length === 0) {
+                setAudioTrackStatus('ended');
+                return;
+            }
+
+            const track = audioTracks[0];
+            if (track.readyState === 'ended') {
+                setAudioTrackStatus('ended');
+            } else if (track.muted || !track.enabled) {
+                setAudioTrackStatus('muted');
+            } else {
+                setAudioTrackStatus('active');
+            }
+        };
+
+        checkAudioStatus();
+        audioMonitorIntervalRef.current = setInterval(checkAudioStatus, 500);
+    }, [requiresMicrophone]);
+
+    const stopAudioMonitoring = useCallback(() => {
+        if (audioMonitorIntervalRef.current) {
+            clearInterval(audioMonitorIntervalRef.current);
+            audioMonitorIntervalRef.current = null;
+        }
+        setAudioTrackStatus('active');
+    }, []);
+    
+    // Timer duration based on question type and difficulty
     const questionTimeLimitSeconds = useMemo(() => {
-        if (isSpeechQuestion) return 2 * 60; // 2 minutes
-        if (isCodingQuestion || isSystemDesignQuestion) return 15 * 60; // 15 minutes
-        return 2 * 60; // Default to 2 minutes for unknown types
-    }, [isSpeechQuestion, isCodingQuestion, isSystemDesignQuestion]);
+        const difficulty = normalizedDifficulty;
+        const speechDurations = {
+            easy: 2 * 60,
+            medium: 3 * 60,
+            hard: 5 * 60,
+        };
+        const codingDurations = {
+            easy: 5 * 60,
+            medium: 10 * 60,
+            hard: 15 * 60,
+        };
+
+        if (isSpeechQuestion) {
+            return speechDurations[difficulty] ?? speechDurations.medium;
+        }
+        if (isCodingQuestion || isSystemDesignQuestion) {
+            return codingDurations[difficulty] ?? codingDurations.medium;
+        }
+        return 2 * 60; // Default for other question types
+    }, [isSpeechQuestion, isCodingQuestion, isSystemDesignQuestion, normalizedDifficulty]);
 
     const trimmedAnswer = useMemo(() => (
         typeof answer === 'string' ? answer.trim() : ''
@@ -634,6 +723,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         setRecordingAttempts(prev => prev + 1);
         await startVideoSegment();
         startSpeechRecognition();
+        startAudioMonitoring();
     }, [
         recordingAttempts,
         MAX_RECORDING_ATTEMPTS,
@@ -642,6 +732,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         questionTimeLimitSeconds,
         startVideoSegment,
         startSpeechRecognition,
+        startAudioMonitoring,
     ]);
 
     const handleStopRecording = useCallback(async () => {
@@ -671,8 +762,9 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             timerRef.current = null;
         }
         timerDeadlineRef.current = null;
+        stopAudioMonitoring();
         return recording;
-    }, [isRecordingActive, stopSpeechRecognition, captureVideoClip, answer]);
+    }, [isRecordingActive, stopSpeechRecognition, captureVideoClip, answer, stopAudioMonitoring]);
 
     const handleDeleteRecording = useCallback(() => {
         setSavedRecording(null);
@@ -724,6 +816,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         try {
             setFeedbackStatus('pending');
             setFeedbackError(null);
+            setIsNoAnsweredQuestions(false);
             setCanViewFeedback(false);
             setIsRatingModalOpen(false);
             setShowFeedback(false);
@@ -734,6 +827,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             const message = error?.response?.data?.detail || 'Unable to regenerate feedback right now. Please try again later.';
             setFeedbackStatus('failed');
             setFeedbackError(message);
+            setIsNoAnsweredQuestions(message.toLowerCase().includes('no answered questions found'));
             if (typeof addToast === 'function') {
                 addToast(message, 'error');
             }
@@ -881,6 +975,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             if (isCurrentQuestionFinal) {
                 setFeedbackError(message);
                 setFeedbackStatus('failed');
+                setIsNoAnsweredQuestions(message.toLowerCase().includes('no answered questions found'));
                 setIsComplete(true);
                 setIsAnalyzingFinal(false);
                 if (typeof addToast === 'function') {
@@ -961,6 +1056,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
             if (isFinalQuestion) {
                 setFeedbackError(message);
                 setFeedbackStatus('failed');
+                setIsNoAnsweredQuestions(message.toLowerCase().includes('no answered questions found'));
                 setIsComplete(true);
                 setIsAnalyzingFinal(false);
                 if (typeof addToast === 'function') {
@@ -1121,7 +1217,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
         }
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach((track) => track.stop());
+            audioStreamRef.current = stream;
             setMicrophoneReady(true);
             setMicrophoneError(null);
         } catch (error) {
@@ -1389,6 +1485,7 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                     key="session-completed"
                     status={feedbackStatus}
                     errorMessage={feedbackError}
+                    isNoAnsweredQuestions={isNoAnsweredQuestions}
                     onRetry={handleRegenerateFeedback}
                     onGetFeedback={handleViewFeedback}
                     canViewFeedback={canViewFeedback}
@@ -1480,6 +1577,11 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                             muted
                             showStatusText={false}
                         />
+                        {isRecordingActive && !faceDetected && (
+                            <p className="video-panel__warning" role="alert">
+                                Face not detected. Please stay in frame — this may impact your feedback score.
+                            </p>
+                        )}
                         {isVideoUploading && (
                             <p className="video-panel__hint">Uploading your response video…</p>
                         )}
@@ -1586,6 +1688,16 @@ export default function InterviewScreen({ interviewData, onInterviewEnd, addToas
                                             {answer || 'Speak to see your transcript here...'}
                                         </div>
                                     </div>
+                                    {audioTrackStatus === 'muted' && (
+                                        <p className="recording-audio-warning" role="alert">
+                                            Microphone is muted. Please unmute to record audio.
+                                        </p>
+                                    )}
+                                    {audioTrackStatus === 'ended' && (
+                                        <p className="recording-audio-warning" role="alert">
+                                            Microphone not working. Please check your microphone settings.
+                                        </p>
+                                    )}
                                 </div>
                             )}
 
