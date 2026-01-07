@@ -120,7 +120,7 @@ const VideoRecorder = forwardRef(function VideoRecorder(
           video: {
             facingMode,
             width: { ideal: 640 },
-            height: { ideal: 480 },
+            height: { ideal: 360 },
           },
           audio: false,
         });
